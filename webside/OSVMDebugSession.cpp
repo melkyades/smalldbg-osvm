@@ -166,13 +166,7 @@ std::optional<int> OSVMDebugSession::getPid() const {
 // run control
 // ---------------------------------------------------------------------------
 
-
-
-
-
 std::string OSVMDebugSession::getRegisters() const { return "{}"; }
-
-
 
 std::string OSVMDebugSession::listBreakpoints() const { return "[]"; }
 
