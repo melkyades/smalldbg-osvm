@@ -90,22 +90,6 @@ HttpResponse OSVMWebsideServer::handleClassify(const HttpRequest& req) const {
     return res;
 }
 
-HttpResponse OSVMWebsideServer::handleInspect(const HttpRequest& req) const {
-    HttpResponse res;
-    auto* osvm = osvmSession();
-    auto oop = req.params.find("oop");
-    if (osvm == nullptr || oop == req.params.end()) {
-        res.statusCode = 400;
-        res.body = Json::object().set("error", "oop is required").dump();
-        return res;
-    }
-    int maxSlots = 64;
-    auto requested = req.params.find("maxSlots");
-    if (requested != req.params.end()) maxSlots = std::stoi(requested->second);
-    res.body = webside::inspectOSVMObject(osvm->inspector(), parseHexParam(oop->second), maxSlots);
-    return res;
-}
-
 std::string OSVMWebsideServer::nativeSymbolsData(const std::string& filter) const {
     if (!isActive()) return "[]";
     return WebsideServer::nativeSymbolsData(filter);

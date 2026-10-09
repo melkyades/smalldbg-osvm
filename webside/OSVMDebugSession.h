@@ -56,7 +56,6 @@ public:
     std::string listBreakpoints() const override;
     std::string readMemory(uint64_t address, size_t size) const override;
     std::string waitForEvent(int timeoutMs = 5000) override;
-    std::string describeObject(uint64_t handle, size_t maxDepth = 1) const override;
 
     smalldbg::Debugger& debugger() const override { return *ownedDebugger; }
     OSVMInspector& inspector() const override { return *ownedInspector; }
@@ -71,6 +70,7 @@ protected:
     smalltalk::Inspector& smalltalkInspector() const override { return *ownedInspector; }
     webside::Json classJson(const smalltalk::ClassEntry& entry) const override;
     webside::Json methodJson(const smalltalk::MethodEntry& method) const override;
+    void describeHeader(webside::Json& json, uint64_t oop) const override;
 
 private:
     bool openImageFile(const std::string& path);

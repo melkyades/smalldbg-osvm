@@ -174,8 +174,11 @@ std::string OSVMDebugSession::readMemory(uint64_t address, size_t size) const {
 
 std::string OSVMDebugSession::waitForEvent(int) { return "{}"; }
 
-std::string OSVMDebugSession::describeObject(uint64_t handle, size_t) const {
-    return webside::inspectOSVMObject(inspector(), handle, 64);
+void OSVMDebugSession::describeHeader(Json& json, uint64_t oop) const {
+    const SpurHeapObject object = image->objectAt(oop).asHeapObject();
+    json.set("format", static_cast<int>(object.format()))
+        .set("classIndex", static_cast<int>(object.classIndex()))
+        .set("hash", static_cast<int>(object.identityHash()));
 }
 
 // ---------------------------------------------------------------------------

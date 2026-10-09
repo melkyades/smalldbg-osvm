@@ -25,51 +25,6 @@ std::string osvmClassifyJson(const osvm::OSVMInspector& inspector, uint64_t addr
                .dump();
 }
 
-std::string inspectOSVMObject(const osvm::OSVMInspector& inspector, uint64_t oop, int maxSlots) {
-    if (oop == 0) return Json::object().set("error", "no oop given").dump();
-
-    const osvm::SpurObject object = inspector.imageHandle()->objectAt(oop);
-    auto json = Json::object()
-        .set("oop", Json::hex(oop))
-        .set("class", object.className())
-        .set("printString", object.printString());
-
-    if (object.isImmediate()) {
-        json.set("immediate", true)
-            .set("size", 0)
-            .set("slots", Json::array());
-        return json.dump();
-    }
-
-    const osvm::SpurHeapObject heapObject = object.asHeapObject();
-    const uint64_t slots = heapObject.numSlots();
-    json.set("immediate", false)
-        .set("format", static_cast<int>(heapObject.format()))
-        .set("classIndex", static_cast<int>(heapObject.classIndex()))
-        .set("hash", static_cast<int>(heapObject.identityHash()))
-        .set("size", static_cast<int64_t>(slots));
-
-    if (heapObject.isBytes()) {
-        json.set("bytes", heapObject.bytesAsString());
-        json.set("slots", Json::array());
-        return json.dump();
-    }
-
-    auto array = Json::array();
-    const uint64_t limit = maxSlots <= 0 ? slots
-                                         : std::min<uint64_t>(slots, static_cast<uint64_t>(maxSlots));
-    for (uint64_t i = 0; i < limit; i++) {
-        const osvm::SpurObject value = heapObject.slotAt(i);
-        array.add(Json::object()
-            .set("index", static_cast<int64_t>(i))
-            .set("raw", Json::hex(value.oop()))
-            .set("class", value.className())
-            .set("value", value.printString()));
-    }
-    json.set("slots", array);
-    return json.dump();
-}
-
 std::string osvmRegionsJson(const osvm::OSVMInspector& inspector) {
     const osvm::SpurRoots& roots = inspector.imageHandle()->rootObjects();
     auto heap = Json::object()
