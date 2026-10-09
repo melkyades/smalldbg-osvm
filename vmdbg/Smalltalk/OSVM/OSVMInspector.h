@@ -25,11 +25,14 @@ public:
     }
     /// An image is one contiguous old space with fixed bounds.
     bool refreshRegions() override;
-    /// The image indexes every class as it loads; there is nothing to walk.
-    bool discoverClasses() override { return true; }
-
-    /// JSON describing the heap extent and the well-known roots.
-    /// JSON classifying an address as heap, immediate, or outside the image.
+    /** Fills the class table from the classes the image indexed as it
+     *  loaded. **/
+    bool discoverClasses() override;
+    std::vector<smalltalk::MethodEntry> methodsOf(
+        const std::string& className) const override;
+    std::string sourceOf(const smalltalk::MethodEntry& method) const override;
+    std::vector<smalltalk::ClassVariable> classVariablesOf(
+        const std::string& className) const override;
 
 private:
     SpurImage* image{nullptr};

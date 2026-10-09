@@ -17,24 +17,6 @@ namespace {
 constexpr size_t MAX_CONTEXT_DEPTH = 512;
 constexpr size_t MAX_HEAP_OBJECTS = 4000000;
 
-std::string lowercased(std::string text) {
-    std::transform(text.begin(), text.end(), text.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return text;
-}
-
-bool matches(const std::string& candidate, const std::string& text,
-             bool ignoreCase, const std::string& condition) {
-    const std::string a = ignoreCase ? lowercased(candidate) : candidate;
-    const std::string b = ignoreCase ? lowercased(text) : text;
-    if (b.empty()) return false;
-    if (condition == "beginning") return a.rfind(b, 0) == 0;
-    if (condition == "ending") return a.size() >= b.size() &&
-                                     a.compare(a.size() - b.size(), b.size(), b) == 0;
-    if (condition == "exact") return a == b;
-    return a.find(b) != std::string::npos;
-}
-
 bool endsWithImage(const std::string& path) {
     static const std::string suffix = ".image";
     return path.size() > suffix.size() &&
@@ -389,260 +371,24 @@ std::string OSVMDebugSession::getSmalltalkStackContents(int threadIndex, int) co
 // class browsing
 // ---------------------------------------------------------------------------
 
-bool OSVMDebugSession::discoverClasses() { return image != nullptr; }
-
-std::string OSVMDebugSession::classJson(const SpurImage::ClassEntry& entry, bool meta) const {
-    const uint64_t oop = meta ? entry.metaclass : entry.oop;
-    const std::string name = meta ? entry.name + " class" : entry.name;
-
-    auto json = Json::object()
-        .set("name", name)
-        .set("definition", image->definitionOfClass(oop))
-        .set("comment", meta ? std::string() : image->commentOfClass(entry.oop))
-        .set("category", entry.category)
-        .set("package", entry.category)
-        .set("variable", false)
-        .set("printString", name)
-        .set("oop", Json::hex(oop));
-
-    const std::string superclass = image->superclassNameOf(oop);
-    if (superclass.empty()) json.set("superclass", nullptr);
-    else json.set("superclass", superclass);
-
-    json.set("class", meta ? std::string("Metaclass") : name + " class");
-    return json.dump();
+// The image holds each class's definition and comment as the browser that
+// wrote them shows them.
+Json OSVMDebugSession::classJson(const smalltalk::ClassEntry& entry) const {
+    Json json = smalltalk::Session::classJson(entry);
+    const uint64_t oop = image->resolveClassOop(entry.name);
+    json.set("definition", image->definitionOfClass(oop));
+    json.set("oop", addressHex(oop));
+    if (!isMetaclassName(entry.name))
+        json.set("comment", image->commentOfClass(oop));
+    return json;
 }
 
-std::string OSVMDebugSession::listClasses(const std::string& root, bool namesOnly,
-                                          bool, int) const {
-    if (!image) return "[]";
-    auto array = Json::array();
-
-    const auto include = [&](const SpurImage::ClassEntry& entry) {
-        if (namesOnly) {
-            array.add(entry.name);
-            return;
-        }
-        array.add(Json::parse(classJson(entry, false)));
-    };
-
-    if (root.empty()) {
-        for (const auto& [name, entry] : image->classes()) include(entry);
-        return array.dump();
-    }
-
-    // Walk the subclass tree beneath `root`.
-    std::vector<std::string> pending{root};
-    while (!pending.empty()) {
-        const std::string current = pending.back();
-        pending.pop_back();
-        const auto* entry = image->findClass(current);
-        if (entry == nullptr) continue;
-        include(*entry);
-        for (const auto& child : image->subclassNamesOf(entry->oop))
-            pending.push_back(child);
-    }
-    return array.dump();
-}
-
-std::string OSVMDebugSession::getClass(const std::string& name) const {
-    if (!image) return "{}";
-    static const std::string suffix = " class";
-    const bool meta = name.size() > suffix.size() &&
-                      name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
-    const std::string base = meta ? name.substr(0, name.size() - suffix.size()) : name;
-
-    const auto* entry = image->findClass(base);
-    if (entry == nullptr) return "{}";
-    return classJson(*entry, meta);
-}
-
-std::string OSVMDebugSession::getSubclasses(const std::string& name) const {
-    if (!image) return "[]";
-    const uint64_t classOop = image->resolveClassOop(name);
-    if (classOop == 0) return "[]";
-
-    auto array = Json::array();
-    for (const auto& child : image->subclassNamesOf(classOop)) {
-        const auto* entry = image->findClass(child);
-        if (entry != nullptr) array.add(Json::parse(classJson(*entry, false)));
-        else array.add(Json::object().set("name", child));
-    }
-    return array.dump();
-}
-
-std::string OSVMDebugSession::getSuperclasses(const std::string& name) const {
-    if (!image) return "[]";
-    uint64_t classOop = image->resolveClassOop(name);
-    if (classOop == 0) return "[]";
-
-    auto array = Json::array();
-    for (SpurClassDescription current(image->behaviorAt(classOop).superclass().heapObject());
-         current;
-         current = SpurClassDescription(current.superclass().heapObject())) {
-        const std::string className = current.name();
-        const auto* entry = image->findClass(className);
-        if (entry != nullptr) array.add(Json::parse(classJson(*entry, false)));
-        else array.add(Json::object().set("name", className));
-    }
-    return array.dump();
-}
-
-std::string OSVMDebugSession::getVariables(const std::string& name) const {
-    if (!image) return "[]";
-    const uint64_t classOop = image->resolveClassOop(name);
-    if (classOop == 0) return "[]";
-
-    auto array = Json::array();
-    for (const auto& variable : image->allInstanceVariableNamesOf(classOop)) {
-        array.add(Json::object()
-            .set("name", variable)
-            .set("class", name)
-            .set("type", "instance"));
-    }
-    for (const auto& [variable, value] : image->classVariablesOf(classOop)) {
-        array.add(Json::object()
-            .set("name", variable)
-            .set("class", name)
-            .set("type", "class")
-            .set("value", image->objectAt(value).printString()));
-    }
-    return array.dump();
-}
-
-std::string OSVMDebugSession::getInstanceVariables(const std::string& name) const {
-    if (!image) return "[]";
-    const uint64_t classOop = image->resolveClassOop(name);
-    if (classOop == 0) return "[]";
-
-    auto array = Json::array();
-    for (const auto& variable : image->instanceVariableNamesOf(classOop))
-        array.add(Json::object().set("name", variable).set("class", name).set("type", "instance"));
-    return array.dump();
-}
-
-std::string OSVMDebugSession::getClassVariables(const std::string& name) const {
-    if (!image) return "[]";
-    const uint64_t classOop = image->resolveClassOop(name);
-    if (classOop == 0) return "[]";
-
-    auto array = Json::array();
-    for (const auto& [variable, value] : image->classVariablesOf(classOop)) {
-        array.add(Json::object()
-            .set("name", variable)
-            .set("class", name)
-            .set("type", "class")
-            .set("value", image->objectAt(value).printString()));
-    }
-    return array.dump();
-}
-
-std::string OSVMDebugSession::getCategories(const std::string& name) const {
-    if (!image) return "[]";
-    const uint64_t classOop = image->resolveClassOop(name);
-    if (classOop == 0) return "[]";
-
-    auto array = Json::array();
-    for (const auto& category : image->categoriesOf(classOop)) array.add(category);
-    return array.dump();
-}
-
-std::string OSVMDebugSession::getUsedCategories(const std::string& name) const {
-    if (!image) return "[]";
-    const uint64_t classOop = image->resolveClassOop(name);
-    if (classOop == 0) return "[]";
-
-    std::vector<std::string> used;
-    for (const auto& method : image->methodsOf(classOop)) {
-        if (method.category.empty()) continue;
-        if (std::find(used.begin(), used.end(), method.category) == used.end())
-            used.push_back(method.category);
-    }
-    std::sort(used.begin(), used.end());
-
-    auto array = Json::array();
-    for (const auto& category : used) array.add(category);
-    return array.dump();
-}
-
-std::string OSVMDebugSession::getSelectors(const std::string& name) const {
-    if (!image) return "[]";
-    const uint64_t classOop = image->resolveClassOop(name);
-    if (classOop == 0) return "[]";
-
-    auto array = Json::array();
-    for (const auto& method : image->methodsOf(classOop)) array.add(method.selector);
-    return array.dump();
-}
-
-std::string OSVMDebugSession::methodJson(uint64_t classOop, const std::string& className,
-                                         const std::string& selector, uint64_t methodOop) const {
-    const auto header = image->headerOfMethod(methodOop);
-    return Json::object()
-        .set("selector", selector)
-        .set("methodClass", className)
-        .set("class", className)
-        .set("category", image->categoryOfMethod(classOop, selector))
-        .set("source", image->sourceOfMethod(methodOop))
-        .set("author", "")
-        .set("timestamp", "")
-        .set("package", "")
-        .set("oop", Json::hex(methodOop))
-        .set("numArgs", static_cast<int64_t>(header.numArgs))
-        .set("numTemps", static_cast<int64_t>(header.numTemps))
-        .dump();
-}
-
-std::string OSVMDebugSession::getMethods(const std::string& name) const {
-    if (!image) return "[]";
-    const uint64_t classOop = image->resolveClassOop(name);
-    if (classOop == 0) return "[]";
-
-    auto array = Json::array();
-    for (const auto& method : image->methodsOf(classOop))
-        array.add(Json::parse(methodJson(classOop, name, method.selector, method.oop)));
-    return array.dump();
-}
-
-std::string OSVMDebugSession::getMethod(const std::string& className,
-                                        const std::string& selector) const {
-    if (!image) return "{}";
-    const uint64_t classOop = image->resolveClassOop(className);
-    if (classOop == 0) return "{}";
-    const uint64_t methodOop = image->methodNamed(classOop, selector);
-    if (methodOop == 0) return "{}";
-    return methodJson(classOop, className, selector, methodOop);
-}
-
-std::string OSVMDebugSession::search(const std::string& text, bool ignoreCase,
-                                     const std::string& condition,
-                                     const std::string& type) const {
-    if (!image) return "[]";
-    auto array = Json::array();
-    const bool wantClasses = type == "class" || type == "all" || type.empty();
-    const bool wantSelectors = type == "selector" || type == "all" || type.empty();
-
-    if (wantClasses) {
-        for (const auto& [name, entry] : image->classes()) {
-            if (!matches(name, text, ignoreCase, condition)) continue;
-            array.add(Json::object().set("text", name).set("type", "class"));
-        }
-    }
-
-    if (wantSelectors) {
-        std::vector<std::string> seen;
-        for (const auto& [name, entry] : image->classes()) {
-            for (uint64_t side : {entry.oop, entry.metaclass}) {
-                for (const auto& method : image->methodsOf(side)) {
-                    if (!matches(method.selector, text, ignoreCase, condition)) continue;
-                    if (std::find(seen.begin(), seen.end(), method.selector) != seen.end()) continue;
-                    seen.push_back(method.selector);
-                    array.add(Json::object().set("text", method.selector).set("type", "selector"));
-                }
-            }
-        }
-    }
-    return array.dump();
+Json OSVMDebugSession::methodJson(const smalltalk::MethodEntry& method) const {
+    Json json = smalltalk::Session::methodJson(method);
+    const auto header = image->headerOfMethod(method.oop);
+    json.set("numArgs", static_cast<int64_t>(header.numArgs));
+    json.set("numTemps", static_cast<int64_t>(header.numTemps));
+    return json;
 }
 
 // An image opened off disk has no process behind it, so it is neither

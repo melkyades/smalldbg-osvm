@@ -53,26 +53,6 @@ public:
     std::string getSmalltalkFrameBindings(int threadIndex, int frameIndex) const override;
     std::string getSmalltalkStackContents(int threadIndex, int selectedFrame) const override;
 
-    // ---- class browsing ----
-    bool discoverClasses() override;
-    std::string listClasses(const std::string& root = "", bool namesOnly = false,
-                            bool tree = false, int depth = -1) const override;
-    std::string getClass(const std::string& name) const override;
-    std::string getSubclasses(const std::string& name) const override;
-    std::string getSuperclasses(const std::string& name) const override;
-    std::string getVariables(const std::string& name) const override;
-    std::string getInstanceVariables(const std::string& name) const override;
-    std::string getClassVariables(const std::string& name) const override;
-    std::string getCategories(const std::string& name) const override;
-    std::string getUsedCategories(const std::string& name) const override;
-    std::string getSelectors(const std::string& name) const override;
-    std::string getMethods(const std::string& name) const override;
-    std::string getMethod(const std::string& className,
-                          const std::string& selector) const override;
-    std::string search(const std::string& text, bool ignoreCase,
-                       const std::string& condition,
-                       const std::string& type) const override;
-
     std::string listBreakpoints() const override;
     std::string readMemory(uint64_t address, size_t size) const override;
     std::string waitForEvent(int timeoutMs = 5000) override;
@@ -89,13 +69,12 @@ public:
 
 protected:
     smalltalk::Inspector& smalltalkInspector() const override { return *ownedInspector; }
+    webside::Json classJson(const smalltalk::ClassEntry& entry) const override;
+    webside::Json methodJson(const smalltalk::MethodEntry& method) const override;
 
 private:
     bool openImageFile(const std::string& path);
     bool openLiveVm(const std::string& imagePath);
-    std::string classJson(const SpurImage::ClassEntry& entry, bool meta) const;
-    std::string methodJson(uint64_t classOop, const std::string& className,
-                           const std::string& selector, uint64_t methodOop) const;
 
     /// One Smalltalk Process reified as a debugger-visible thread.
     struct GreenThread {
