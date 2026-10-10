@@ -193,12 +193,12 @@ std::shared_ptr<smalldbg::Thread> OSVMDebugSession::vmThread() const {
     return threadRunning("interpret");
 }
 
-void OSVMDebugSession::refreshGreenThreads() {
+bool OSVMDebugSession::readGreenThreads() {
     greenThreads.clear();
-    if (!image) return;
+    if (!image) return false;
 
     const SpurProcessorScheduler scheduler = image->scheduler();
-    if (!scheduler) return;
+    if (!scheduler) return false;
 
     const auto alreadyKnown = [&](const SpurProcess& process) {
         for (const auto& thread : greenThreads)
@@ -225,9 +225,11 @@ void OSVMDebugSession::refreshGreenThreads() {
     for (const auto& process : processesInHeap()) {
         if (process.suspendedContext()) addProcess(process, false);
     }
+    return true;
 }
 
 int OSVMDebugSession::greenThreadCount() const {
+    const_cast<OSVMDebugSession*>(this)->refreshGreenThreads();
     return static_cast<int>(greenThreads.size());
 }
 

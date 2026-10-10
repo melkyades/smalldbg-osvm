@@ -41,7 +41,7 @@ public:
 
     // ---- green threads (Smalltalk processes) ----
     std::shared_ptr<smalldbg::Thread> vmThread() const override;
-    void refreshGreenThreads() override;
+    bool readGreenThreads() override;
     int greenThreadCount() const override;
     std::string getGreenThreadName(int threadIndex) const override;
     std::string listSmalltalkFrames(int threadIndex) const override;

@@ -13,11 +13,6 @@ OSVMDebugSession* OSVMWebsideServer::osvmSession() const {
     return workspace.sessionAs<OSVMDebugSession>();
 }
 
-void OSVMWebsideServer::onPostSuspend() {
-    auto* osvm = osvmSession();
-    if (osvm != nullptr) osvm->refreshGreenThreads();
-}
-
 void OSVMWebsideServer::setupRoutes() {
     WebsideServer::setupRoutes();
     overrideDebuggerRoutes();

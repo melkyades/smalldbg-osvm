@@ -20,7 +20,6 @@ protected:
         return "OpenSmalltalk (Spur) image server on smalldbg";
     }
     void setupRoutes() override;
-    void onPostSuspend() override;
 
     webside::HttpResponse handleRegions(const webside::HttpRequest& req) const override;
 
