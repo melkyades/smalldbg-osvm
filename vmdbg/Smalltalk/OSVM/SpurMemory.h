@@ -7,12 +7,9 @@
 
 namespace osvm {
 
-/// Roots needed to bootstrap an object model out of a Spur heap.
-///
-/// A heap read from an image file derives these by walking the fixed
-/// prologue; a heap read from a live VM reads them from the interpreter's
-/// global symbols. Oops are absolute in both cases, so nothing else has to
-/// be rebased once these are known.
+/** SpurRoots holds the objects needed to start reading a Spur heap. An image file finds
+ *  them at the start of its heap; a live VM reads them from the interpreter's globals.
+ *  Oops are absolute in both cases, so nothing needs relocating once these are known. **/
 struct SpurRoots {
     uint64_t nilObj{0};
     uint64_t falseObj{0};
@@ -22,12 +19,9 @@ struct SpurRoots {
     bool valid{false};
 };
 
-/// A Spur object memory: where its roots are and how far it reaches, read
-/// through a debugger.
-///
-/// The debugger is either one built over an image file (SpurImageFile) or the
-/// one attached to a live VM (SpurProcessMemory). Everything above this works
-/// in absolute oops and never learns which one it is reading.
+/** A SpurMemory reads a Spur object memory, its roots and its bounds through a debugger,
+ *  either one opened on an image file (SpurImageFile) or one attached to a live VM
+ *  (SpurProcessMemory). Code above it uses absolute oops and does not know which. **/
 class SpurMemory {
 public:
     virtual ~SpurMemory() = default;
@@ -40,15 +34,15 @@ public:
 
     virtual SpurRoots roots() const = 0;
 
-    /// Inclusive-exclusive bounds of the readable old-space range. A live
-    /// heap reports the image extent it was loaded from; objects allocated
-    /// past it are still readable, they just do not bound heap walks.
+    /** Returns the first address of the readable old space. **/
     virtual uint64_t baseAddress() const = 0;
+    /** Returns the address just past the readable old space. A live heap reports the end of
+     *  the image it loaded; objects allocated past it can be read but heap walks stop there. **/
     virtual uint64_t endAddress() const = 0;
 
     virtual bool isLive() const { return false; }
 
-    /** The word at `address`. Returns zero when it cannot be read. **/
+    /** Returns the word at `address`, or 0 when it cannot be read. **/
     uint64_t readWord(uint64_t address) const {
         uint64_t word = 0;
         if (!readBytes(address, &word, sizeof(word))) return 0;

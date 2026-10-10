@@ -23,7 +23,7 @@ public:
 
     const SpurImage* image() const { return spurImage; }
 
-    /// The same object seen as an untyped oop.
+    /** Returns the same object as an untyped oop. **/
     operator SpurObject() const { return SpurObject(rawOop, spurImage); }
 
     // ---- encoding, as Spur tags it ------------------------------------
@@ -38,7 +38,7 @@ public:
     bool isFalse() const override;
     bool isPresent() const { return rawOop != 0 && !isNil(); }
 
-    /// The receiver's class, as Spur records it in the class table.
+    /** Returns the receiver's class, looked up in the class table. **/
     SpurHeapObject spurClass() const;
 
     // ---- what the shared rendering and kind tests need ----------------
@@ -72,16 +72,16 @@ public:
     // ---- byte access (String, Symbol, ByteArray, CompiledMethod) -----
     uint64_t byteSize() const;
     std::string bytesAsString() const;
-    /// Text of a String or Symbol; empty for anything else.
+    /** Returns the text of a String or Symbol, or an empty string for anything else. **/
     std::string stringValue() const;
 
     // ---- class resolution -------------------------------------------
     bool isClass() const;
     bool isMetaclass() const;
 
-    /// Name of this object when it is itself a class or metaclass.
+    /** Returns the name of this object when it is a class or metaclass. **/
     std::string nameIfClass() const;
-    /// Text of the `name` instance variable, without the metaclass suffix.
+    /** Returns the text of the `name` instance variable, without the metaclass suffix. **/
     std::string rawNameSlot() const;
 
     // ---- heap walking ------------------------------------------------

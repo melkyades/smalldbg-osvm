@@ -13,17 +13,15 @@
 
 namespace osvm {
 
-/// The Smalltalk object model layered over a Spur heap.
-///
-/// Reads objects through a SpurMemory, so the same code serves an image file
-/// and a live VM. Class discovery goes through Smalltalk's globals rather
-/// than the class table, because Spur only enters a class into that table
-/// once something needs its identity hash.
+/** A SpurImage reads Smalltalk objects from a Spur heap through a SpurMemory, so the same
+ *  code serves an image file and a live VM. It finds classes through Smalltalk's globals,
+ *  because Spur adds a class to the class table only once its identity hash is needed. **/
 class SpurImage {
 public:
     explicit SpurImage(SpurMemory* mem) : memory(mem) {}
 
-    /// Resolve the roots, find Metaclass, and index every global class.
+    /** Reads the roots, finds Metaclass and indexes every global class. Returns false
+     *  when a step fails, with the reason in error(). **/
     bool load();
 
     // ---- factories: wrap a raw oop as a typed object ----
@@ -37,19 +35,20 @@ public:
         return SpurCompiledMethod(heapObjectAt(oop));
     }
 
-    /// Smalltalk itself.
+    /** Returns the Smalltalk system dictionary. **/
     SpurSystemDictionary systemDictionary() const {
         return SpurSystemDictionary(heapObjectAt(smalltalkOop));
     }
-    /// Processor, reached through the special objects array.
+    /** Returns Processor, found through the special objects array. **/
     SpurProcessorScheduler scheduler() const;
 
-    /// The heap as plain bytes, which is what the shared object model reads
-    /// through.
+    /** Returns the debugger that reads the heap as plain bytes for the shared object
+     *  model, or null when there is no memory. **/
     smalldbg::Debugger* debugger() const { return memory ? memory->debugger() : nullptr; }
 
-    /// Bounds of the readable heap, for the region map.
+    /** Returns the start of the readable heap, for the region map. **/
     uint64_t objectMemoryBase() const { return memory ? memory->baseAddress() : 0; }
+    /** Returns the end of the readable heap, for the region map. **/
     uint64_t objectMemoryEnd() const { return memory ? memory->endAddress() : 0; }
 
     // ---- raw object access (the primitive layer Spur objects read through) ----
@@ -79,9 +78,9 @@ public:
     bool isClass(uint64_t oop) const;
 
     // ---- strings ----
-    /// Text of a String or Symbol; empty for anything else.
+    /** Returns the text of a String or Symbol, or an empty string for anything else. **/
     std::string stringOf(uint64_t oop) const;
-    /// A one-line rendering of any oop, for inspectors and bindings.
+    /** Returns a one-line description of any oop, for inspectors and bindings. **/
     std::string printStringOf(uint64_t oop, int depth = 0) const;
 
     // ---- classes ----
@@ -97,7 +96,8 @@ public:
     const std::map<std::string, ClassEntry>& classes() const { return classCache; }
     const ClassEntry* findClass(const std::string& name) const;
 
-    /// Resolve a Webside class name, honouring a trailing " class".
+    /** Returns the class named by a Webside class name, or its metaclass when the name
+     *  ends in " class". Returns 0 when there is no such class. **/
     uint64_t resolveClassOop(const std::string& name) const;
     std::string nameOfClass(uint64_t classOop) const;
 
@@ -123,10 +123,12 @@ public:
     std::string categoryOfMethod(uint64_t classOop, const std::string& selector) const;
     std::vector<std::string> categoriesOf(uint64_t classOop) const;
 
-    /// Selectors and literals a method refers to, for senders/implementors.
+    /** Returns the literals of a method, including the selectors it sends, for senders
+     *  and implementors. **/
     std::vector<uint64_t> literalsOf(uint64_t methodOop) const;
 
-    /// Where a CompiledMethod is installed, for naming stack frames.
+    /** A MethodLocation names the class and selector a CompiledMethod is installed under,
+     *  for naming stack frames. **/
     struct MethodLocation {
         std::string className;
         std::string selector;
@@ -147,7 +149,7 @@ public:
     const SpurRoots& rootObjects() const { return imageRoots; }
     const std::string& error() const { return lastError; }
 
-    /// Walk every global, including non-class values.
+    /** Calls `visit` with the name and value of every global, including non-class values. **/
     void globalsDo(const std::function<void(const std::string&, uint64_t)>& visit) const;
 
 private:

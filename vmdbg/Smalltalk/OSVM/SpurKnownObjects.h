@@ -45,8 +45,8 @@ public:
     SpurBehavior superclass() const;
     SpurMethodDictionary methodDictionary() const;
 
-    /// The format instance variable: instSpec in the high bits, the fixed
-    /// field count in the low 16.
+    /** Returns the format instance variable: instSpec in the high bits, the fixed field
+     *  count in the low 16. **/
     int64_t formatValue() const;
     uint32_t instSpec() const;
     uint32_t fixedFields() const;
@@ -67,12 +67,12 @@ public:
     explicit SpurClassDescription(SpurHeapObject obj) : SpurBehavior(obj) {}
 
     std::vector<std::string> instanceVariableNames() const;
-    /// Own instance variables preceded by every superclass's, in slot order.
+    /** Returns every superclass's instance variables followed by its own, in slot order. **/
     std::vector<std::string> allInstanceVariableNames() const;
     SpurClassOrganizer organization() const;
 
     bool isMetaclass() const { return heap.isMetaclass(); }
-    /// Full name, with the " class" suffix when this is a metaclass.
+    /** Returns the full name, with the " class" suffix when this is a metaclass. **/
     std::string name() const;
 
     struct Slot {
@@ -94,7 +94,7 @@ public:
     std::string rawName() const;
     std::vector<SpurClass> subclasses() const;
     std::vector<std::string> subclassNames() const;
-    /// Class variables as (name, value) pairs, sorted by name.
+    /** Returns the class variables as (name, value) pairs, sorted by name. **/
     std::vector<std::pair<std::string, SpurObject>> classVariables() const;
 
     struct Slot {
@@ -134,7 +134,7 @@ public:
     int64_t tally() const;
     SpurHeapObject values() const;
 
-    /// Occupied entries as (selector, method) pairs, in slot order.
+    /** Returns the occupied entries as (selector, method) pairs, in slot order. **/
     std::vector<std::pair<std::string, SpurCompiledMethod>> entries() const;
 
     struct Slot {
@@ -162,7 +162,7 @@ public:
     Header header() const;
 
     std::vector<SpurObject> literals() const;
-    /// Zero when the method carries no source pointer.
+    /** Returns the method's source pointer, or 0 when it has none. **/
     uint64_t sourcePointer() const;
     std::string sourceCode() const;
 
@@ -234,7 +234,7 @@ public:
 
     std::vector<std::string> categories() const;
     std::string categoryOfElement(const std::string& element) const;
-    /// Every element paired with its category, in one pass.
+    /** Returns every element paired with its category, read in one pass. **/
     std::vector<std::pair<std::string, std::string>> elementCategories() const;
 
     struct Slot {
@@ -252,7 +252,8 @@ public:
     SpurClassOrganizer() = default;
     explicit SpurClassOrganizer(SpurHeapObject obj) : SpurCategorizer(obj) {}
 
-    /// Comment text, resolving the RemoteString it is usually stored as.
+    /** Returns the comment text, reading it from the source file when it is stored as a
+     *  RemoteString, as it usually is. **/
     std::string classComment() const;
 
     struct Slot {
@@ -297,7 +298,7 @@ public:
     SpurObject receiver() const;
 
     bool isBlockContext() const;
-    /// Live temporaries and arguments, bounded by stackp.
+    /** Returns the arguments and temporaries in use, up to stackp. **/
     std::vector<SpurObject> temporaries() const;
 
     struct Slot {
@@ -359,7 +360,8 @@ public:
     explicit SpurProcessorScheduler(SpurHeapObject obj) : SpurKnownObject(obj) {}
 
     SpurProcess activeProcess() const;
-    /// Runnable processes only; ones blocked on a semaphore are on its list.
+    /** Returns the runnable processes only; processes blocked on a semaphore are on the
+     *  semaphore's list instead. **/
     std::vector<SpurProcess> quiescentProcesses() const;
 
     struct Slot {

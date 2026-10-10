@@ -6,28 +6,26 @@
 
 namespace osvm {
 
-/// The .sources / .changes pair a Cuis image stores its method text in.
-///
-/// A CompiledMethod ends in a 4-byte trailer whose last byte is >= 252; the
-/// source pointer is that byte minus 251 followed by the three preceding
-/// bytes, most significant first. Bit 16r2000000 of the resulting pointer
-/// selects .changes over .sources, and the remaining offset is scaled by
-/// CuisSourceFileArray's pointerScale so 25 bits can address both files.
+/** A SpurSourceFiles reads method text from the .sources / .changes pair of a Cuis image.
+ *  A CompiledMethod ends in a 4-byte trailer whose last byte is >= 252; the source pointer
+ *  is that byte minus 251 followed by the three preceding bytes, most significant first.
+ *  Bit 16r2000000 of the pointer selects .changes over .sources, and the remaining offset
+ *  is scaled by CuisSourceFileArray's pointerScale so 25 bits can address both files. **/
 class SpurSourceFiles {
 public:
-    /// Locate the files that go with `imagePath`, preferring the .changes of
-    /// the same stem and the newest .sources beside it.
+    /** Finds the files that go with `imagePath`, preferring the .changes with the same
+     *  stem and the newest .sources beside it. **/
     void locateFor(const std::string& imagePath);
 
     bool loadSources(const std::string& path);
     bool loadChanges(const std::string& path);
 
-    /// The chunk starting at `sourcePointer`, without its trailing bang.
+    /** Returns the chunk starting at `sourcePointer`, without its trailing bang, or an empty
+     *  string when there is no such text. **/
     std::string chunkAt(uint64_t sourcePointer) const;
 
-    /// The chunk at a raw file position. RemoteString (used for class
-    /// comments) stores an unscaled position and its own file number rather
-    /// than an encoded source pointer.
+    /** Returns the chunk at a raw position in a file. RemoteString, used for class comments,
+     *  stores an unscaled position and a file number instead of a source pointer. **/
     std::string chunkIn(uint32_t fileIndex, uint64_t position) const;
 
     bool haveSources() const { return !sources.empty(); }

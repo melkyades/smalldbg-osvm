@@ -7,13 +7,11 @@
 
 namespace osvm {
 
-/// A 64-bit Spur image file, read through a debugger built over it.
-///
-/// Header (little-endian): a 4-byte version, a 4-byte header size, then
-/// 8-byte fields -- data size, old base address, special objects oop,
-/// last hash, saved window size, header flags, extra VM memory. Object
-/// data follows at `headerSize` and maps linearly onto `oldBaseAddr`, which
-/// is the one region of the snapshot the debugger reads.
+/** A SpurImageFile reads a 64-bit Spur image file through a debugger opened on it.
+ *  The little-endian header has a 4-byte version, a 4-byte header size, then 8-byte
+ *  fields: data size, old base address, special objects oop, last hash, saved window
+ *  size, header flags, extra VM memory. Object data starts at `headerSize` and maps
+ *  linearly onto `oldBaseAddr`. **/
 class SpurImageFile : public SpurMemory {
 public:
     bool open(const std::string& path);
@@ -28,7 +26,8 @@ public:
     const std::string& error() const { return lastError; }
 
 private:
-    /// Walk nil / false / true / freeLists / hiddenRoots at the image start.
+    /** Finds nil, false, true, the free lists and the hidden roots, which come first in
+     *  the image in that order. **/
     void deriveRoots();
     uint64_t objectAfter(uint64_t oop) const;
 

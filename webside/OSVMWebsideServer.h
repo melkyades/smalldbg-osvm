@@ -7,8 +7,8 @@
 
 namespace osvm {
 
-/// Webside server for OpenSmalltalk images (Cuis, and Squeak-family images
-/// sharing the Spur object format).
+/** An OSVMWebsideServer is the Webside server for OpenSmalltalk images: Cuis, and
+ *  Squeak-family images that share the Spur object format. **/
 class OSVMWebsideServer : public smalltalk::WebsideServer {
 public:
     OSVMWebsideServer(webside::Workspace& workspace, int port)
@@ -26,8 +26,8 @@ protected:
 private:
     OSVMDebugSession* osvmSession() const;
 
-    /// Replace the base routes that assume a live debugger, so an image-only
-    /// session answers instead of dereferencing one.
+    /** Sends /debuggers/1/frames to the general dispatcher: an image has no
+     *  native threads, so its Smalltalk processes start at debugger 1. **/
     void overrideDebuggerRoutes();
 };
 

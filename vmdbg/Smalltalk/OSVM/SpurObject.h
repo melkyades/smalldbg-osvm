@@ -77,11 +77,11 @@ public:
     SpurSmallInteger() = default;
     SpurSmallInteger(uint64_t oop, const SpurImage* image) : SpurObject(oop, image) {}
 
-    /// Decoded value. Meaningful only when the oop carries the SmallInteger
-    /// tag; use valueOr() when the slot may hold anything else.
+    /** Returns the decoded value, which is meaningful only when the oop has the
+     *  SmallInteger tag; valueOr() handles slots that may hold anything else. **/
     int64_t value() const { return Spur::smallIntegerValue(rawOop); }
 
-    /// value() when this really is a SmallInteger, otherwise `fallback`.
+    /** Returns value() when this is a SmallInteger, otherwise `fallback`. **/
     int64_t valueOr(int64_t fallback) const {
         return isSmallInteger() ? value() : fallback;
     }
@@ -106,14 +106,14 @@ public:
     SpurCharacter() = default;
     SpurCharacter(uint64_t oop, const SpurImage* image) : SpurObject(oop, image) {}
 
-    /// Code point. Meaningful only when the oop carries the Character tag.
+    /** Returns the code point, which is meaningful only when the oop has the Character tag. **/
     uint32_t value() const { return Spur::characterValue(rawOop); }
 
     uint32_t valueOr(uint32_t fallback) const {
         return isCharacter() ? value() : fallback;
     }
 
-    /// The code point encoded as UTF-8; empty when it is not a valid one.
+    /** Returns the code point encoded as UTF-8, or an empty string when it is not valid. **/
     std::string asUtf8() const;
 
     static constexpr uint32_t MAX_CODE_POINT = 0x10FFFF;
@@ -135,7 +135,8 @@ public:
     SpurSmallFloat() = default;
     SpurSmallFloat(uint64_t oop, const SpurImage* image) : SpurObject(oop, image) {}
 
-    /// Decoded value. Meaningful only when the oop carries the SmallFloat tag.
+    /** Returns the decoded value, which is meaningful only when the oop has the
+     *  SmallFloat tag. **/
     double value() const { return Spur::smallFloatValue(rawOop); }
 
     double valueOr(double fallback) const {

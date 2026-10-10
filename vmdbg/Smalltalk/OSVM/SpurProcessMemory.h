@@ -6,19 +6,15 @@
 
 namespace osvm {
 
-/// Spur object memory read out of a live OpenSmalltalk VM process.
-///
-/// Oops in a loaded heap are absolute, so the only bootstrap needed is the
-/// address of the interpreter's roots. Those come from the VM's own global
-/// symbols; a stripped VM leaves the session with the image file instead.
+/** A SpurProcessMemory reads the Spur object memory of a live OpenSmalltalk VM process.
+ *  Oops in a loaded heap are absolute, so only the addresses of the roots are needed. **/
 class SpurProcessMemory : public SpurMemory {
 public:
     explicit SpurProcessMemory(smalldbg::Debugger* dbg) { reader = dbg; }
 
-    /// Find the roots of the loaded heap. Tries the interpreter's global
-    /// symbols first; released VMs are stripped, so it then scans the target
-    /// for the fixed nil/false/true prologue every Spur heap starts with.
-    /// The image the VM was started from supplies the reference layout.
+    /** Finds the roots of the loaded heap through the interpreter's global symbols or, on a
+     *  stripped VM, by scanning for the nil/false/true objects every Spur heap starts with.
+     *  The image the VM was started from gives the expected layout. **/
     bool locateRoots(uint64_t imageBase = 0, uint64_t imageEnd = 0,
                      uint64_t imageSpecialObjects = 0);
 
@@ -30,10 +26,10 @@ public:
     const std::string& error() const { return lastError; }
 
 private:
-    /// Read a VM global holding an oop, by symbol name.
+    /** Reads the oop held by the VM global named `symbol`. **/
     bool readGlobalOop(const char* symbol, uint64_t& out) const;
     bool rootsFromSymbols(SpurRoots& found) const;
-    /// Locate nil by its header signature, then derive the rest from it.
+    /** Finds nil by its header, then the other roots from it. **/
     bool rootsFromPrologueScan(SpurRoots& found, uint64_t imageBase,
                                uint64_t imageSpecialObjects,
                                std::string& why) const;

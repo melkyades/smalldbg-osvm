@@ -259,7 +259,7 @@ std::string SpurImage::commentOfClass(uint64_t classOop) const {
     return behaviorAt(classOop).organization().classComment();
 }
 
-/// The subclass: keyword a class's instances call for.
+/** Returns the subclass: keyword that matches the layout of a class's instances. **/
 static std::string subclassKeywordFor(uint32_t instSpec) {
     if (instSpec == Fmt::VARIABLE || instSpec == Fmt::FIXED_VARIABLE) return "variableSubclass:";
     if (instSpec == Fmt::WEAK_VARIABLE) return "weakSubclass:";

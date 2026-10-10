@@ -8,7 +8,7 @@
 
 namespace osvm {
 
-/// Serves the /inspect and /regions routes for an OpenSmalltalk heap.
+/** An OSVMInspector serves the /inspect and /regions routes for an OpenSmalltalk heap. **/
 class OSVMInspector : public smalltalk::Inspector {
 public:
     explicit OSVMInspector(SpurImage* img)
@@ -21,7 +21,8 @@ public:
     std::unique_ptr<smalltalk::HeapObject> heapObjectFor(uint64_t address) const override {
         return std::make_unique<SpurHeapObject>(image->heapObjectAt(address));
     }
-    /// An image is one contiguous old space with fixed bounds.
+    /** Records the image's old space as the only region, since it is one contiguous
+     *  range with fixed bounds. **/
     bool refreshRegions() override;
     /** Fills the class table from the classes the image indexed as it
      *  loaded. **/
@@ -36,7 +37,7 @@ private:
     SpurImage* image{nullptr};
 
 public:
-    /// The image these reads go through.
+    /** Returns the image this inspector reads through. **/
     SpurImage* imageHandle() const { return image; }
 };
 

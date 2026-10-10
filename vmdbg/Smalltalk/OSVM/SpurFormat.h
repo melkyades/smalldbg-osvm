@@ -5,18 +5,16 @@
 
 namespace osvm {
 
-/// Spur 64-bit object format.
-///
-/// Every object carries one 8-byte header word:
-///
-///   bits 0..21   classIndex   (index into the class table)
-///   bits 24..28  format       (instSpec, see Fmt below)
-///   bits 32..53  identityHash
-///   bits 56..63  numSlots     (255 means the real count is in the
-///                              8-byte word immediately before the header)
-///
-/// An oop addresses the header word; slot 0 starts 8 bytes later. Immediates
-/// use the low 3 tag bits, so SmallIntegers are 61-bit.
+/** Spur describes the 64-bit Spur object format. Every object has one 8-byte header word:
+ *
+ *    bits 0..21   classIndex   (index into the class table)
+ *    bits 24..28  format       (instSpec, see Fmt below)
+ *    bits 32..53  identityHash
+ *    bits 56..63  numSlots     (255 means the real count is in the
+ *                               8-byte word immediately before the header)
+ *
+ *  An oop points at the header word; slot 0 starts 8 bytes later. Immediates
+ *  use the low 3 bits as a tag, so SmallIntegers have 61 bits. **/
 struct Spur {
     static constexpr uint64_t CLASS_INDEX_MASK = 0x3FFFFF;
     static constexpr int      FORMAT_SHIFT     = 24;
@@ -94,8 +92,8 @@ struct Spur {
         return (payload << 3) | TAG_SMALL_FLOAT;
     }
 
-    /// Doubles outside the 8-bit exponent range, and every infinity and NaN,
-    /// have to stay boxed.
+    /** Returns false for doubles outside the 8-bit exponent range and for every infinity
+     *  and NaN, which have to stay boxed. **/
     static bool fitsSmallFloat(double value) {
         DoubleBits punned;
         punned.value = value;
@@ -106,20 +104,21 @@ struct Spur {
         return reduced >= 1 && reduced <= static_cast<int64_t>(SMALL_FLOAT_EXPONENT_MASK);
     }
 
-    /// Class table index of an immediate, matching the VM's fixed assignment.
+    /** Returns the class table index of an immediate, which the VM assigns by tag. **/
     static uint32_t immediateClassIndex(uint64_t oop) {
         if (isSmallInteger(oop)) return 1;
         return (oop & TAG_MASK) == TAG_CHARACTER ? 2 : 4;
     }
 
-    /// Bytes an object of `slots` slots occupies, header included.
+    /** Returns the bytes an object of `slots` slots occupies, header included. An empty
+     *  object still takes one slot. **/
     static uint64_t objectBytesForSlots(uint64_t slots) {
         return slots == 0 ? BASE_HEADER_SIZE + BYTES_PER_OOP
                           : BASE_HEADER_SIZE + slots * BYTES_PER_OOP;
     }
 };
 
-/// instSpec values (the `format` header field).
+/** Fmt lists the instSpec values of the `format` header field. **/
 struct Fmt {
     static constexpr uint32_t ZERO_SIZED      = 0;
     static constexpr uint32_t FIXED           = 1;
@@ -136,12 +135,13 @@ struct Fmt {
     static bool isPointers(uint32_t f) { return f <= WEAK_FIXED; }
     static bool isBytes(uint32_t f)    { return f >= INDEXABLE_8 && f < COMPILED_METHOD; }
     static bool isMethod(uint32_t f)   { return f >= COMPILED_METHOD; }
-    /// Byte objects store their odd-byte count in the low format bits.
+    /** Returns the count of unused trailing bytes, which byte objects keep in the low
+     *  format bits. **/
     static uint32_t oddBytes(uint32_t f) { return f & 7; }
 };
 
-/// The `format` instance variable of a Behavior: instSpec in the high bits,
-/// fixed field count in the low 16.
+/** BehaviorFormat decodes the `format` instance variable of a Behavior: instSpec in the
+ *  high bits, fixed field count in the low 16. **/
 struct BehaviorFormat {
     static constexpr int      INST_SPEC_SHIFT = 16;
     static constexpr uint64_t INST_SPEC_MASK  = 0x1F;
@@ -155,7 +155,7 @@ struct BehaviorFormat {
     }
 };
 
-/// Well-known indices into the special objects array.
+/** SpecialObject lists well-known indices into the special objects array. **/
 struct SpecialObject {
     static constexpr uint64_t NIL              = 0;
     static constexpr uint64_t FALSE            = 1;

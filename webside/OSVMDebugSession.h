@@ -14,23 +14,22 @@ namespace smalldbg { class Debugger; }
 
 namespace osvm {
 
-/// A Webside session over an OpenSmalltalk image.
-///
-/// Opens either a .image file directly or a VM process running one. Class
-/// browsing is identical in both modes because it goes through SpurImage;
-/// only run control and green threads need a live target.
-/// How long a launched VM is left to read its image in, when nobody says.
+/** kDefaultStartupPauseMs is how long a launched VM runs before it is suspended, unless
+ *  the session is told otherwise. The heap does not exist until the VM has read its image in. **/
 static constexpr int kDefaultStartupPauseMs = 3000;
 
+/** An OSVMDebugSession is a Webside session over an OpenSmalltalk image, read either from a
+ *  .image file or from a VM process running it. Class browsing reads through SpurImage the
+ *  same way in both cases; only run control and green threads need a live VM. **/
 class OSVMDebugSession : public smalltalk::Session {
 public:
     explicit OSVMDebugSession(smalldbg::Debuggee debuggee);
     ~OSVMDebugSession() override;
 
-    /// The image the VM was started on may be named after the "--". It is
-    /// optional, and only a hint: the heap is found by scanning either way,
-    /// but old space keeps its layout across a load, so the image is what says
-    /// where the special objects array sits inside it.
+    /** Opens an image file directly, or reads the heap of a VM, letting a launched VM read its
+     *  image in first. The image a VM was started on, optionally named after the "--", is a
+     *  hint that says where the special objects array sits, since old space keeps its layout
+     *  across a load. **/
     bool onTargetOpened(const vmdbg::TargetSpec& target) override;
     bool readsWithoutEngine(const vmdbg::TargetSpec& target) const override;
     const char* dialectTag() const override { return "osvm"; }
@@ -59,9 +58,6 @@ public:
     SpurImage* getImage() const { return image.get(); }
     const std::string& error() const { return lastError; }
 
-    /// How long to let a freshly launched VM run before suspending it. The
-    /// heap does not exist until the VM has read its image in.
-
 protected:
     smalltalk::Inspector& smalltalkInspector() const override { return *ownedInspector; }
     webside::Json classJson(const smalltalk::ClassEntry& entry) const override;
@@ -72,7 +68,7 @@ private:
     bool openImageFile(const std::string& path);
     bool openLiveVm(const std::string& imagePath);
 
-    /// One Smalltalk Process reified as a debugger-visible thread.
+    /** A GreenThread shows one Smalltalk Process to the debugger as a thread. **/
     struct GreenThread {
         SpurProcess process;
         std::string name;
@@ -81,8 +77,8 @@ private:
     };
     std::vector<SpurContext> walkContexts(const SpurContext& context) const;
     std::string frameLabel(const SpurContext& context) const;
-    /// Processes blocked on a semaphore are on that semaphore's list, not on
-    /// the scheduler's, so the heap is the only place that sees all of them.
+    /** Returns every Process found by walking the heap, since processes blocked on a
+     *  semaphore are on that semaphore's list rather than the scheduler's. **/
     std::vector<SpurProcess> processesInHeap() const;
 
     // An image-only session never attaches this, but it is always there, so

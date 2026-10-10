@@ -25,8 +25,8 @@ bool looksIntegral(const std::string& text) {
     return text.find_first_of(".eEni") == std::string::npos;
 }
 
-/// Shortest representation that reads back as the same double, the way a
-/// Smalltalk printString does, with a trailing ".0" kept on whole numbers.
+/** Returns the shortest text that reads back as the same double, as a Smalltalk
+ *  printString does, keeping a trailing ".0" on whole numbers. **/
 std::string printDouble(double value) {
     char buffer[64];
     int digits = MAX_DOUBLE_DIGITS;
