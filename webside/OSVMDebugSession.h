@@ -36,12 +36,10 @@ public:
     const char* dialectTag() const override { return "osvm"; }
 
     bool isActive() const override;
-    std::optional<int> getPid() const override;
 
     // ---- run control (live targets only) ----
 
     std::string getStopReason() const override;
-    std::string getRegisters() const override;
 
     // ---- green threads (Smalltalk processes) ----
     std::shared_ptr<smalldbg::Thread> vmThread() const override;

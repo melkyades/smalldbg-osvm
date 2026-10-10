@@ -138,17 +138,9 @@ bool OSVMDebugSession::onTargetOpened(const vmdbg::TargetSpec& target) {
 
 bool OSVMDebugSession::isActive() const { return image != nullptr; }
 
-std::optional<int> OSVMDebugSession::getPid() const {
-    auto pid = debugger().attachedPid();
-    if (!pid) return std::nullopt;
-    return static_cast<int>(*pid);
-}
-
 // ---------------------------------------------------------------------------
 // run control
 // ---------------------------------------------------------------------------
-
-std::string OSVMDebugSession::getRegisters() const { return "{}"; }
 
 std::string OSVMDebugSession::listBreakpoints() const { return "[]"; }
 
