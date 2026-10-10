@@ -14,8 +14,6 @@ public:
     explicit OSVMInspector(SpurImage* img)
         : image(img) {}
 
-    StackRegion evaluatorStack() const override;
-
     // ---- the shared inspector's view of this VM ----------------------
     std::unique_ptr<smalltalk::Object> objectFor(uint64_t oop) const override {
         return std::make_unique<SpurObject>(image->objectAt(oop));

@@ -68,25 +68,17 @@ void OSVMWebsideServer::overrideDebuggerRoutes() {
     });
 }
 
-HttpResponse OSVMWebsideServer::handleRegions(const HttpRequest&) const {
-    HttpResponse res;
+// An image's roots are where a reader starts, and the class count says how
+// much of it was understood.
+HttpResponse OSVMWebsideServer::handleRegions(const HttpRequest& req) const {
+    HttpResponse res = WebsideServer::handleRegions(req);
     auto* osvm = osvmSession();
-    res.body = osvm != nullptr
-        ? webside::osvmRegionsJson(osvm->inspector())
-        : "{}";
-    return res;
-}
-
-HttpResponse OSVMWebsideServer::handleClassify(const HttpRequest& req) const {
-    HttpResponse res;
-    auto* osvm = osvmSession();
-    auto address = req.params.find("address");
-    if (osvm == nullptr || address == req.params.end()) {
-        res.statusCode = 400;
-        res.body = Json::object().set("error", "address is required").dump();
-        return res;
-    }
-    res.body = webside::osvmClassifyJson(osvm->inspector(), parseHexParam(address->second));
+    if (osvm == nullptr || res.body == "{}") return res;
+    auto json = Json::parse(res.body);
+    json.set("roots", Json::parse(webside::osvmRootsJson(osvm->inspector())));
+    json.set("classes", static_cast<int64_t>(
+        osvm->inspector().imageHandle()->classes().size()));
+    res.body = json.dump();
     return res;
 }
 

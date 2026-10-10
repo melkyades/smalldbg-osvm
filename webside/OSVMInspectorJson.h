@@ -3,8 +3,7 @@
 #include <cstdint>
 #include <string>
 namespace webside {
-/// The image's memory regions.
-std::string osvmRegionsJson(const osvm::OSVMInspector& inspector);
-/// What lives at an address.
-std::string osvmClassifyJson(const osvm::OSVMInspector& inspector, uint64_t address);
+/** Returns the addresses of the image's roots (nil, true, false, class table, special
+ *  objects) as a JSON object. **/
+std::string osvmRootsJson(const osvm::OSVMInspector& inspector);
 } // namespace webside

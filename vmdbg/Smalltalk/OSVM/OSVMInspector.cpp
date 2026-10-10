@@ -9,15 +9,9 @@ bool OSVMInspector::refreshRegions() {
     oldSpace.name = "oldSpace";
     oldSpace.start = image->objectMemoryBase();
     oldSpace.end = image->objectMemoryEnd();
-    oldSpace.isObjectMemory = true;
+    oldSpace.kind = vmdbg::Region::Kind::Objects;
     addRegion(std::move(oldSpace));
     return true;
-}
-
-vmdbg::VMInspector::StackRegion OSVMInspector::evaluatorStack() const {
-    // Spur keeps activations in Context objects on the heap rather than in a
-    // contiguous evaluator stack, so there is no region to report.
-    return StackRegion{};
 }
 
 bool OSVMInspector::discoverClasses() {

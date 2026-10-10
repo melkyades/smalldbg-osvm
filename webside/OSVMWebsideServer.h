@@ -23,7 +23,6 @@ protected:
     void onPostSuspend() override;
 
     webside::HttpResponse handleRegions(const webside::HttpRequest& req) const override;
-    webside::HttpResponse handleClassify(const webside::HttpRequest& req) const override;
 
     std::string nativeSymbolsData(const std::string& filter) const override;
     std::string nativeModulesData() const override;
