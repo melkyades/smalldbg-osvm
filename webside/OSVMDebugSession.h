@@ -35,8 +35,6 @@ public:
     bool readsWithoutEngine(const vmdbg::TargetSpec& target) const override;
     const char* dialectTag() const override { return "osvm"; }
 
-    bool isActive() const override;
-
     // ---- run control (live targets only) ----
 
     std::string getStopReason() const override;
@@ -51,11 +49,11 @@ public:
     std::string getSmalltalkFrameBindings(int threadIndex, int frameIndex) const override;
     std::string getSmalltalkStackContents(int threadIndex, int selectedFrame) const override;
 
-    std::string listBreakpoints() const override;
-    std::string readMemory(uint64_t address, size_t size) const override;
-    std::string waitForEvent(int timeoutMs = 5000) override;
-
-    smalldbg::Debugger& debugger() const override { return *ownedDebugger; }
+    /** Returns the debugger the heap is read through: the one over the image
+     *  file, or the one attached to the VM. **/
+    smalldbg::Debugger& debugger() const override {
+        return imageFile ? *imageFile->debugger() : *ownedDebugger;
+    }
     OSVMInspector& inspector() const override { return *ownedInspector; }
 
     SpurImage* getImage() const { return image.get(); }

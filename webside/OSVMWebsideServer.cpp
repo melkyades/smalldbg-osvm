@@ -32,40 +32,6 @@ void OSVMWebsideServer::overrideDebuggerRoutes() {
     };
     server.route("GET", "/debuggers/1/frames", dispatch);
     server.routePrefix("GET", "/debuggers/1/frames", dispatch);
-
-    // An image-only session has no process behind it, so answer these
-    // directly rather than letting the base handlers reach for a debugger.
-    server.route("GET", "/memory", [this](const HttpRequest& req) {
-        HttpResponse res;
-        auto* osvm = osvmSession();
-        auto address = req.params.find("address");
-        if (osvm == nullptr || address == req.params.end()) {
-            res.statusCode = 400;
-            res.body = Json::object().set("error", "address is required").dump();
-            return res;
-        }
-        size_t count = 64;
-        auto requested = req.params.find("count");
-        if (requested != req.params.end()) count = std::stoul(requested->second);
-        res.body = osvm->readMemory(parseHexParam(address->second), count);
-        return res;
-    });
-
-    server.route("GET", "/disassemble", [](const HttpRequest&) {
-        HttpResponse res;
-        res.statusCode = 501;
-        res.body = Json::object()
-            .set("error", "disassembly is not available for Smalltalk bytecode")
-            .dump();
-        return res;
-    });
-
-    server.route("GET", "/symbol", [](const HttpRequest&) {
-        HttpResponse res;
-        res.body = Json::object().set("error", "no native symbols").dump();
-        res.statusCode = 404;
-        return res;
-    });
 }
 
 // An image's roots are where a reader starts, and the class count says how
@@ -80,26 +46,6 @@ HttpResponse OSVMWebsideServer::handleRegions(const HttpRequest& req) const {
         osvm->inspector().imageHandle()->classes().size()));
     res.body = json.dump();
     return res;
-}
-
-std::string OSVMWebsideServer::nativeSymbolsData(const std::string& filter) const {
-    if (!isActive()) return "[]";
-    return WebsideServer::nativeSymbolsData(filter);
-}
-
-std::string OSVMWebsideServer::nativeModulesData() const {
-    if (!isActive()) return "[]";
-    return WebsideServer::nativeModulesData();
-}
-
-std::string OSVMWebsideServer::nativeSymbolDetailData(const std::string& name) const {
-    if (!isActive()) return "{}";
-    return WebsideServer::nativeSymbolDetailData(name);
-}
-
-std::string OSVMWebsideServer::nativeInspectData(const std::string& expression) const {
-    if (!isActive()) return "{}";
-    return WebsideServer::nativeInspectData(expression);
 }
 
 } // namespace osvm

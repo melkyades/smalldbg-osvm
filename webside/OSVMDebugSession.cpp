@@ -136,35 +136,9 @@ bool OSVMDebugSession::onTargetOpened(const vmdbg::TargetSpec& target) {
     return false;
 }
 
-bool OSVMDebugSession::isActive() const { return image != nullptr; }
-
 // ---------------------------------------------------------------------------
 // run control
 // ---------------------------------------------------------------------------
-
-std::string OSVMDebugSession::listBreakpoints() const { return "[]"; }
-
-std::string OSVMDebugSession::readMemory(uint64_t address, size_t size) const {
-    if (!image) return "{}";
-    std::string bytes(size, '\0');
-    if (!image->memoryReader()->readBytes(address, bytes.data(), size))
-        return Json::object().set("error", "unreadable address").dump();
-
-    static const char* digits = "0123456789abcdef";
-    std::string hex;
-    hex.reserve(size * 2);
-    for (unsigned char c : bytes) {
-        hex += digits[c >> 4];
-        hex += digits[c & 0xF];
-    }
-    return Json::object()
-        .set("address", Json::hex(address))
-        .set("size", static_cast<int64_t>(size))
-        .set("data", hex)
-        .dump();
-}
-
-std::string OSVMDebugSession::waitForEvent(int) { return "{}"; }
 
 void OSVMDebugSession::describeHeader(Json& json, uint64_t oop) const {
     const SpurHeapObject object = image->objectAt(oop).asHeapObject();
@@ -389,7 +363,7 @@ Json OSVMDebugSession::methodJson(const smalltalk::MethodEntry& method) const {
 // An image opened off disk has no process behind it, so it is neither
 // stopped nor running.
 std::string OSVMDebugSession::getStopReason() const {
-    if (!isActive() && imageFile) return "image";
+    if (imageFile) return "image";
     return smalltalk::Session::getStopReason();
 }
 

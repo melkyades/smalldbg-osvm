@@ -24,11 +24,6 @@ protected:
 
     webside::HttpResponse handleRegions(const webside::HttpRequest& req) const override;
 
-    std::string nativeSymbolsData(const std::string& filter) const override;
-    std::string nativeModulesData() const override;
-    std::string nativeSymbolDetailData(const std::string& name) const override;
-    std::string nativeInspectData(const std::string& expression) const override;
-
 private:
     OSVMDebugSession* osvmSession() const;
 
