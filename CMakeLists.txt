@@ -2,11 +2,14 @@
 # smalldbg's vmdbg and webside. Serves Cuis and Squeak-family images.
 
 add_library(vmdbg_osvm STATIC
+    vmdbg/Smalltalk/OSVM/CogFrame.cpp
+    vmdbg/Smalltalk/OSVM/CogStackZone.cpp
     vmdbg/Smalltalk/OSVM/OSVMInspector.cpp
     vmdbg/Smalltalk/OSVM/SpurHeapObject.cpp
     vmdbg/Smalltalk/OSVM/SpurImage.cpp
     vmdbg/Smalltalk/OSVM/SpurImageFile.cpp
     vmdbg/Smalltalk/OSVM/SpurKnownObjects.cpp
+    vmdbg/Smalltalk/OSVM/SpurActivation.cpp
     vmdbg/Smalltalk/OSVM/SpurProcessMemory.cpp
     vmdbg/Smalltalk/OSVM/SpurSourceFiles.cpp
 )

@@ -22,6 +22,27 @@ constexpr uint64_t NEW_SPACE_CHUNK = 1u << 20;
 // and the like.
 constexpr uint32_t FIRST_REAL_CLASS_INDEX = 32;
 constexpr int MAX_PRIORITY = 100;
+constexpr size_t MAX_STACK_SLOTS = 8192;
+
+// Sets what identifies an activation: its Context, and for a frame its address,
+// which is all a frame the VM never made a Context for has.
+void setIdentity(Json& json, const SpurActivation& activation) {
+    if (activation.context()) json.set("oop", Json::hex(activation.context().oop()));
+    if (activation.isFrame()) json.set("framePointer", Json::hex(activation.frame().framePointer()));
+}
+
+// Sets where a machine code frame's code starts and, when its callee is on the
+// same stack page, the ip the callee returns to. A base frame returns through
+// the VM instead.
+void setMachineCode(Json& json, const std::vector<SpurActivation>& activations, size_t index) {
+    const SpurActivation& activation = activations[index];
+    if (!activation.isFrame() || !activation.frame().isMachineCode()) return;
+    json.set("functionAddress", Json::hex(activation.frame().codeStart()));
+    if (index == 0) return;
+    const SpurActivation& callee = activations[index - 1];
+    if (callee.isFrame() && !callee.frame().isBase())
+        json.set("ip", Json::hex(callee.frame().returnAddress()));
+}
 
 bool endsWithImage(const std::string& path) {
     static const std::string suffix = ".image";
@@ -157,16 +178,6 @@ void OSVMDebugSession::describeHeader(Json& json, uint64_t oop) const {
 // green threads
 // ---------------------------------------------------------------------------
 
-std::vector<SpurContext> OSVMDebugSession::walkContexts(const SpurContext& context) const {
-    std::vector<SpurContext> contexts;
-    SpurContext current = context;
-    while (current && contexts.size() < MAX_CONTEXT_DEPTH) {
-        contexts.push_back(current);
-        current = current.sender();
-    }
-    return contexts;
-}
-
 std::vector<SpurProcess> OSVMDebugSession::processesInHeap() const {
     std::vector<SpurProcess> found;
 
@@ -240,11 +251,22 @@ bool OSVMDebugSession::looksLikeProcess(const SpurProcess& process) const {
     return !context || context.heapObject().format() == Fmt::FIXED_VARIABLE;
 }
 
+uint64_t OSVMDebugSession::runningFramePointer() const {
+    CogStackZone* zone = ownedInspector->stackZone();
+    if (zone == nullptr || !debugger().isStopped()) return 0;
+    if (framePointerVersion != debugger().stateVersion()) {
+        framePointerVersion = debugger().stateVersion();
+        framePointer = zone->activeFramePointer();
+    }
+    return framePointer;
+}
 
-// Spur keeps activations in Context objects on the heap, so only the native
-// frame of the interpreter tells which thread runs it.
+// A VM with symbols names its interpreter. A JIT runs Smalltalk outside any
+// function, but allocates its stack zone on the stack of the thread running it.
 std::shared_ptr<smalldbg::Thread> OSVMDebugSession::vmThread() const {
-    return threadRunning("interpret");
+    if (auto thread = threadRunning("interpret")) return thread;
+    CogStackZone* zone = ownedInspector->stackZone();
+    return zone != nullptr ? zone->threadHolding(runningFramePointer()) : nullptr;
 }
 
 bool OSVMDebugSession::readGreenThreads() {
@@ -269,7 +291,11 @@ bool OSVMDebugSession::readGreenThreads() {
         if (thread.name.empty())
             thread.name = active ? "active process" : "process";
         if (active) thread.name += " (active)";
-        thread.contexts = walkContexts(process.suspendedContext());
+        thread.active = active;
+        // A running process's context is the VM's current frame, not one it saved.
+        const uint64_t framePointer = active && !process.suspendedContext() ? runningFramePointer() : 0;
+        thread.activations = activationsFrom(process.suspendedContext(), framePointer,
+                                             image.get(), MAX_CONTEXT_DEPTH);
         greenThreads.push_back(thread);
     };
 
@@ -293,14 +319,28 @@ std::string OSVMDebugSession::getGreenThreadName(int threadIndex) const {
     return thread.name + " [priority " + std::to_string(thread.priority) + "]";
 }
 
-std::string OSVMDebugSession::frameLabel(const SpurContext& context) const {
-    const auto* location = image->locationOfMethod(context.method().oop());
+int OSVMDebugSession::activeGreenThread() const {
+    const int count = greenThreadCount();
+    for (int i = 0; i < count; i++)
+        if (greenThreads[i].active) return i;
+    return -1;
+}
+
+std::string OSVMDebugSession::greenThreadOn(uint64_t nativeThreadId) const {
+    auto thread = vmThread();
+    const int active = activeGreenThread();
+    if (!thread || thread->getThreadId() != nativeThreadId || active < 0) return {};
+    return greenThreads[active].name;
+}
+
+std::string OSVMDebugSession::frameLabel(const SpurActivation& activation) const {
+    const auto* location = image->locationOfMethod(activation.method().oop());
 
     std::string label = location != nullptr
         ? location->className + ">>" + location->selector
         : "a CompiledMethod";
 
-    if (context.isBlockContext()) label = "[] in " + label;
+    if (activation.isBlock()) label = "[] in " + label;
     return label;
 }
 
@@ -308,66 +348,76 @@ std::string OSVMDebugSession::listSmalltalkFrames(int threadIndex) const {
     if (threadIndex < 0 || threadIndex >= greenThreadCount()) return "[]";
 
     auto array = Json::array();
-    const auto& contexts = greenThreads[threadIndex].contexts;
-    for (size_t i = 0; i < contexts.size(); i++) {
-        const SpurContext& context = contexts[i];
-        array.add(Json::object()
+    const auto& activations = greenThreads[threadIndex].activations;
+    for (size_t i = 0; i < activations.size(); i++) {
+        const SpurActivation& activation = activations[i];
+        Json frame = Json::object()
             .set("index", static_cast<int64_t>(i + 1))
             .set("type", "smalltalk")
             .set("language", "Smalltalk")
-            .set("label", frameLabel(context))
-            .set("receiver", context.receiver().printString())
-            .set("oop", Json::hex(context.oop())));
+            .set("label", frameLabel(activation))
+            .set("receiver", activation.receiver().printString());
+        setIdentity(frame, activation);
+        setMachineCode(frame, activations, i);
+        array.add(std::move(frame));
     }
     return array.dump();
 }
 
 std::string OSVMDebugSession::getSmalltalkFrameDetail(int threadIndex, int frameIndex) const {
     if (threadIndex < 0 || threadIndex >= greenThreadCount()) return "{}";
-    const auto& contexts = greenThreads[threadIndex].contexts;
-    if (frameIndex < 1 || static_cast<size_t>(frameIndex) > contexts.size()) return "{}";
+    const auto& activations = greenThreads[threadIndex].activations;
+    if (frameIndex < 1 || static_cast<size_t>(frameIndex) > activations.size()) return "{}";
 
-    const SpurContext& context = contexts[frameIndex - 1];
-    const SpurCompiledMethod method = context.method();
+    const SpurActivation& activation = activations[frameIndex - 1];
+    const SpurCompiledMethod method = activation.method();
     const auto* location = image->locationOfMethod(method.oop());
+
+    smalltalk::MethodEntry entry;
+    entry.oop = method.oop();
+    if (location != nullptr) {
+        entry.selector = location->selector;
+        entry.className = location->className;
+        entry.category = image->categoryOfMethod(image->resolveClassOop(location->className),
+                                                 location->selector);
+    }
 
     auto json = Json::object()
         .set("index", frameIndex)
         .set("type", "smalltalk")
         .set("language", "Smalltalk")
-        .set("label", frameLabel(context))
-        .set("oop", Json::hex(context.oop()))
-        .set("method", Json::hex(method.oop()))
-        .set("source", method.sourceCode());
+        .set("label", frameLabel(activation))
+        .set("class", Json::object().set("name", entry.className))
+        .set("method", methodJson(entry));
+    setIdentity(json, activation);
+    setMachineCode(json, activations, static_cast<size_t>(frameIndex - 1));
 
-    if (location != nullptr) {
-        json.set("class", location->className).set("selector", location->selector);
-        const uint64_t classOop = image->resolveClassOop(location->className);
-        json.set("category", image->categoryOfMethod(classOop, location->selector));
+    // A married context's pc is the VM's to keep while its frame runs.
+    if (!activation.isFrame()) {
+        const SpurSmallInteger pc = activation.context().programCounter().asSmallInteger();
+        if (pc.isSmallInteger()) json.set("pc", pc.value());
     }
-
-    const SpurSmallInteger pc = context.programCounter().asSmallInteger();
-    if (pc.isSmallInteger()) json.set("pc", pc.value());
     return json.dump();
 }
 
 std::string OSVMDebugSession::getSmalltalkFrameBindings(int threadIndex, int frameIndex) const {
     if (threadIndex < 0 || threadIndex >= greenThreadCount()) return "[]";
-    const auto& contexts = greenThreads[threadIndex].contexts;
-    if (frameIndex < 1 || static_cast<size_t>(frameIndex) > contexts.size()) return "[]";
+    const auto& activations = greenThreads[threadIndex].activations;
+    if (frameIndex < 1 || static_cast<size_t>(frameIndex) > activations.size()) return "[]";
 
-    const SpurContext& context = contexts[frameIndex - 1];
-    const uint32_t numArgs = context.method().header().numArgs;
+    const SpurActivation& activation = activations[frameIndex - 1];
+    const uint32_t numArgs = activation.isFrame() ? activation.frame().numArgs()
+                                                  : activation.method().header().numArgs;
 
     auto array = Json::array();
-    const SpurObject receiver = context.receiver();
+    const SpurObject receiver = activation.receiver();
     array.add(Json::object()
         .set("name", "self")
         .set("value", receiver.printString())
         .set("raw", Json::hex(receiver.oop()))
         .set("type", "receiver"));
 
-    const auto temporaries = context.temporaries();
+    const auto temporaries = activation.temporaries();
     for (size_t i = 0; i < temporaries.size(); i++) {
         const SpurObject& value = temporaries[i];
         const bool isArgument = i < numArgs;
@@ -381,13 +431,37 @@ std::string OSVMDebugSession::getSmalltalkFrameBindings(int threadIndex, int fra
     return array.dump();
 }
 
-std::string OSVMDebugSession::getSmalltalkStackContents(int threadIndex, int) const {
+// The slots of the frames on the VM's stack pages, each frame owning what it
+// pushed for the call it is making. Activations that are only Contexts on the
+// heap have no stack to show.
+std::string OSVMDebugSession::getSmalltalkStackContents(int threadIndex, int selectedFrame) const {
     if (threadIndex < 0 || threadIndex >= greenThreadCount()) return "[]";
+    const auto& activations = greenThreads[threadIndex].activations;
     auto array = Json::array();
-    for (const SpurContext& context : greenThreads[threadIndex].contexts) {
-        array.add(Json::object()
-            .set("oop", Json::hex(context.oop()))
-            .set("label", frameLabel(context)));
+    const CogFrame* callee = nullptr;
+    for (size_t i = 0; i < activations.size(); i++) {
+        if (!activations[i].isFrame()) { callee = nullptr; continue; }
+        const CogFrame& frame = activations[i].frame();
+        const int index = static_cast<int>(i + 1);
+        const bool calleeOnPage = callee != nullptr && !callee->isBase();
+        const uint64_t low = calleeOnPage ? callee->highestAddress() + Spur::BYTES_PER_OOP
+                                          : frame.lowestAddress();
+        for (uint64_t address = low; address <= frame.highestAddress() &&
+                                     array.size() < MAX_STACK_SLOTS;
+             address += Spur::BYTES_PER_OOP) {
+            const uint64_t value = image->memoryReader()->readWord(address);
+            Json entry = Json::object()
+                .set("address", Json::hex(address))
+                .set("size", static_cast<int64_t>(Spur::BYTES_PER_OOP))
+                .set("value", Json::hex(value))
+                .set("frameIndex", index)
+                .set("frameRel", index < selectedFrame ? -1 : index == selectedFrame ? 0 : 1);
+            const std::string role = frame.roleOf(address);
+            if (!role.empty()) entry.set("role", role);
+            if (frame.holdsObject(address)) entry.set("printString", image->printStringOf(value));
+            array.add(std::move(entry));
+        }
+        callee = &frame;
     }
     return array.dump();
 }

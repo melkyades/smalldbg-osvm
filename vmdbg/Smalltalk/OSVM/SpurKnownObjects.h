@@ -293,7 +293,14 @@ public:
     SpurContext() = default;
     explicit SpurContext(SpurHeapObject obj) : SpurKnownObject(obj) {}
 
+    /** Returns the calling context, or none when there is none on the heap: a married
+     *  context's callers are frames in the VM's stack zone. **/
     SpurContext sender() const;
+    /** Returns true when the context stands for a frame in a Cog VM's stack zone. Its
+     *  sender slot then holds that frame's address, tagged as a SmallInteger. **/
+    bool isMarried() const;
+    /** Returns the address of a married context's frame, or 0 for any other. **/
+    uint64_t framePointer() const;
     SpurObject programCounter() const;
     SpurObject stackPointer() const;
     SpurCompiledMethod method() const;

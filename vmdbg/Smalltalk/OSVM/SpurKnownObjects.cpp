@@ -365,7 +365,17 @@ std::string SpurRemoteString::text() const {
 // ---------------------------------------------------------------------------
 
 SpurContext SpurContext::sender() const {
+    if (isMarried()) return SpurContext();
     return SpurContext(heap.heapSlotAt(SpurContext::Slot::SENDER));
+}
+
+bool SpurContext::isMarried() const {
+    return heap.isPresent() && heap.slotAt(SpurContext::Slot::SENDER).isSmallInteger();
+}
+
+uint64_t SpurContext::framePointer() const {
+    if (!isMarried()) return 0;
+    return heap.rawSlotAt(SpurContext::Slot::SENDER) - Spur::TAG_SMALL_INTEGER;
 }
 
 SpurObject SpurContext::programCounter() const {

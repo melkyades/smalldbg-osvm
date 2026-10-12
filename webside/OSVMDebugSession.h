@@ -3,6 +3,7 @@
 #include "WebsideSession.h"
 #include "Smalltalk/OSVM/OSVMInspector.h"
 #include "Smalltalk/Session.h"
+#include "Smalltalk/OSVM/SpurActivation.h"
 #include "Smalltalk/OSVM/SpurImage.h"
 #include "Smalltalk/OSVM/SpurImageFile.h"
 #include "Smalltalk/OSVM/SpurProcessMemory.h"
@@ -44,6 +45,8 @@ public:
     bool readGreenThreads() override;
     int greenThreadCount() const override;
     std::string getGreenThreadName(int threadIndex) const override;
+    int activeGreenThread() const override;
+    std::string greenThreadOn(uint64_t nativeThreadId) const override;
     std::string listSmalltalkFrames(int threadIndex) const override;
     std::string getSmalltalkFrameDetail(int threadIndex, int frameIndex) const override;
     std::string getSmalltalkFrameBindings(int threadIndex, int frameIndex) const override;
@@ -74,10 +77,13 @@ private:
         SpurProcess process;
         std::string name;
         int priority{0};
-        std::vector<SpurContext> contexts;
+        bool active{false};
+        std::vector<SpurActivation> activations;
     };
-    std::vector<SpurContext> walkContexts(const SpurContext& context) const;
-    std::string frameLabel(const SpurContext& context) const;
+    std::string frameLabel(const SpurActivation& activation) const;
+    /** Returns the frame pointer the running process is at, read once per stop. Returns
+     *  0 for an image file, and when the VM's stack zone cannot be found. **/
+    uint64_t runningFramePointer() const;
     /** Returns every Process found by walking the heap, since processes blocked on a
      *  semaphore are on that semaphore's list rather than the scheduler's. **/
     std::vector<SpurProcess> processesInHeap() const;
@@ -94,6 +100,8 @@ private:
     // Needs the image, so it is built while opening rather than in the
     // constructor. The workspace hands the session out only once it is set.
     std::unique_ptr<OSVMInspector> ownedInspector;
+    mutable uint64_t framePointerVersion{UINT64_MAX};
+    mutable uint64_t framePointer{0};
     std::vector<GreenThread> greenThreads;
     std::string lastError;
     std::string imagePath;

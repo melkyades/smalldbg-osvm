@@ -1,6 +1,7 @@
 #pragma once
 
 #include "VMInspector.h"
+#include "CogStackZone.h"
 #include "SpurImage.h"
 #include "Smalltalk/Inspector.h"
 #include <memory>
@@ -12,7 +13,8 @@ namespace osvm {
 class OSVMInspector : public smalltalk::Inspector {
 public:
     explicit OSVMInspector(SpurImage* img)
-        : image(img) {}
+        : image(img),
+          zone(img->memoryReader()->isLive() ? std::make_unique<CogStackZone>(img) : nullptr) {}
 
     // ---- the shared inspector's view of this VM ----------------------
     std::unique_ptr<smalltalk::Object> objectFor(uint64_t oop) const override {
@@ -32,10 +34,15 @@ public:
     std::vector<smalltalk::ClassVariable> classVariablesOf(
         const std::string& className) const override;
 
+    /** Returns where a live Cog VM runs its processes, or null for an image file. It
+     *  lives as long as the inspector. **/
+    CogStackZone* stackZone() const { return zone.get(); }
+
 private:
     void addLiveRegions();
 
     SpurImage* image{nullptr};
+    std::unique_ptr<CogStackZone> zone;
 
 public:
     /** Returns the image this inspector reads through. **/
