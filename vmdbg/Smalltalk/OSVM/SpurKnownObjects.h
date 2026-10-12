@@ -160,6 +160,9 @@ public:
         bool hasPrimitive{false};
     };
     Header header() const;
+    /** Returns the method's header word, read through its machine code when the JIT
+     *  compiled it. **/
+    int64_t headerValue() const;
 
     std::vector<SpurObject> literals() const;
     /** Returns the method's source pointer, or 0 when it has none. **/

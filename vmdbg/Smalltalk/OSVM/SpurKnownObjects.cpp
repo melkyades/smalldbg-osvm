@@ -1,5 +1,6 @@
 #include "SpurKnownObjects.h"
 #include "SpurImage.h"
+#include "CogFormat.h"
 #include <algorithm>
 
 namespace osvm {
@@ -182,14 +183,20 @@ SpurMethodDictionary::entries() const {
 // SpurCompiledMethod
 // ---------------------------------------------------------------------------
 
+// A Cog VM that has compiled a method keeps its machine code's address in the
+// header slot, and the header itself in that code's own header.
+int64_t SpurCompiledMethod::headerValue() const {
+    const SpurObject raw = heap.slotAt(SpurCompiledMethod::Slot::HEADER);
+    if (raw.isSmallInteger()) return raw.asSmallInteger().value();
+    const uint64_t cogged = heap.image()->memoryReader()->readWord(raw.oop() + Cog::COG_METHOD_HEADER);
+    return Spur::isSmallInteger(cogged) ? SpurSmallInteger(cogged, heap.image()).value() : 0;
+}
+
 SpurCompiledMethod::Header SpurCompiledMethod::header() const {
     Header decoded;
     if (!heap.isPresent()) return decoded;
 
-    const SpurSmallInteger raw = heap.slotAt(SpurCompiledMethod::Slot::HEADER).asSmallInteger();
-    if (!raw.isSmallInteger()) return decoded;
-
-    const int64_t value = raw.value();
+    const int64_t value = headerValue();
     decoded.numLiterals = static_cast<uint32_t>(value & NUM_LITERALS_MASK);
     decoded.hasPrimitive = ((value >> PRIMITIVE_SHIFT) & 1) != 0;
     decoded.numTemps = static_cast<uint32_t>((value >> NUM_TEMPS_SHIFT) & NUM_TEMPS_MASK);
