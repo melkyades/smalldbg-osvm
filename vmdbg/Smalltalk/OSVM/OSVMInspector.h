@@ -23,7 +23,8 @@ public:
     std::unique_ptr<smalltalk::HeapObject> heapObjectFor(uint64_t address) const override {
         return std::make_unique<SpurHeapObject>(image->heapObjectAt(address));
     }
-    /** Records old space and, in a live VM, the new space in front of it. **/
+    /** Records old space and, in a live VM, the new space in front of it and the zone
+     *  its JIT compiles methods into. **/
     bool refreshRegions() override;
     /** Fills the class table from the classes the image indexed as it
      *  loaded. **/
@@ -40,9 +41,14 @@ public:
 
 private:
     void addLiveRegions();
+    /** Returns an address inside the zone the JIT compiles methods into, or 0 when
+     *  neither the VM's symbols nor the running process say where it is. **/
+    uint64_t codeZoneAddress() const;
 
     SpurImage* image{nullptr};
     std::unique_ptr<CogStackZone> zone;
+    // The VM reserves its code zone once, so an address found in it stays good.
+    mutable uint64_t codeZone{0};
 
 public:
     /** Returns the image this inspector reads through. **/
