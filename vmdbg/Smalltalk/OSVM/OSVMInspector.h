@@ -21,8 +21,7 @@ public:
     std::unique_ptr<smalltalk::HeapObject> heapObjectFor(uint64_t address) const override {
         return std::make_unique<SpurHeapObject>(image->heapObjectAt(address));
     }
-    /** Records the image's old space as the only region, since it is one contiguous
-     *  range with fixed bounds. **/
+    /** Records old space and, in a live VM, the new space in front of it. **/
     bool refreshRegions() override;
     /** Fills the class table from the classes the image indexed as it
      *  loaded. **/
@@ -34,6 +33,8 @@ public:
         const std::string& className) const override;
 
 private:
+    void addLiveRegions();
+
     SpurImage* image{nullptr};
 
 public:

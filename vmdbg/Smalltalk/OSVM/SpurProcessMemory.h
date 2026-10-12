@@ -22,6 +22,7 @@ public:
     uint64_t baseAddress() const override { return base; }
     uint64_t endAddress() const override { return end; }
     bool isLive() const override { return true; }
+    std::pair<uint64_t, uint64_t> allocationContaining(uint64_t address) const override;
 
     const std::string& error() const { return lastError; }
 

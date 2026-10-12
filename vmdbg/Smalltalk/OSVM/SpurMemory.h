@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <utility>
 
 namespace osvm {
 
@@ -41,6 +42,13 @@ public:
     virtual uint64_t endAddress() const = 0;
 
     virtual bool isLive() const { return false; }
+
+    /** Returns the start and end of the block of memory the VM reserved that holds
+     *  `address`, such as its whole object memory or its machine code zone. Returns an
+     *  empty range when there is no process to ask. **/
+    virtual std::pair<uint64_t, uint64_t> allocationContaining(uint64_t /*address*/) const {
+        return {0, 0};
+    }
 
     /** Returns the word at `address`, or 0 when it cannot be read. **/
     uint64_t readWord(uint64_t address) const {

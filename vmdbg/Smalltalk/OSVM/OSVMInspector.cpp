@@ -2,16 +2,40 @@
 
 namespace osvm {
 
+namespace {
+
+vmdbg::Region regionOf(const char* name, uint64_t start, uint64_t end, vmdbg::Region::Kind kind) {
+    vmdbg::Region region;
+    region.name = name;
+    region.start = start;
+    region.end = end;
+    region.kind = kind;
+    return region;
+}
+
+} // namespace
+
 bool OSVMInspector::refreshRegions() {
     if (!image) return false;
     clearRegions();
-    vmdbg::Region oldSpace;
-    oldSpace.name = "oldSpace";
-    oldSpace.start = image->objectMemoryBase();
-    oldSpace.end = image->objectMemoryEnd();
-    oldSpace.kind = vmdbg::Region::Kind::Objects;
-    addRegion(std::move(oldSpace));
+    if (image->memoryReader()->isLive()) {
+        addLiveRegions();
+        return true;
+    }
+    addRegion(regionOf("oldSpace", image->objectMemoryBase(), image->objectMemoryEnd(),
+                       vmdbg::Region::Kind::Objects));
     return true;
+}
+
+// A live VM keeps new space in front of old space, in one allocation that old
+// space fills to its end.
+void OSVMInspector::addLiveRegions() {
+    const SpurMemory& memory = *image->memoryReader();
+    const uint64_t oldStart = image->objectMemoryBase();
+    const auto [heapStart, heapEnd] = memory.allocationContaining(oldStart);
+    if (heapStart < oldStart) addRegion(regionOf("newSpace", heapStart, oldStart, vmdbg::Region::Kind::Objects));
+    addRegion(regionOf("oldSpace", oldStart, heapEnd > oldStart ? heapEnd : image->objectMemoryEnd(),
+                       vmdbg::Region::Kind::Objects));
 }
 
 bool OSVMInspector::discoverClasses() {
