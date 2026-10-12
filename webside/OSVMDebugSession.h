@@ -6,6 +6,7 @@
 #include "Smalltalk/OSVM/SpurImage.h"
 #include "Smalltalk/OSVM/SpurImageFile.h"
 #include "Smalltalk/OSVM/SpurProcessMemory.h"
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -80,6 +81,9 @@ private:
     /** Returns every Process found by walking the heap, since processes blocked on a
      *  semaphore are on that semaphore's list rather than the scheduler's. **/
     std::vector<SpurProcess> processesInHeap() const;
+    void addProcessesInNewSpace(std::vector<SpurProcess>& found,
+                                const std::function<bool(SpurBehavior)>& isProcessClass) const;
+    bool looksLikeProcess(const SpurProcess& process) const;
 
     // An image-only session never attaches this, but it is always there, so
     // isActive() rather than a null test tells a live target from a file.

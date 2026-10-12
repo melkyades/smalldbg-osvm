@@ -6,6 +6,7 @@
 #include <cctype>
 #include <chrono>
 #include <iostream>
+#include <map>
 #include <thread>
 
 using webside::Json;
@@ -16,6 +17,11 @@ namespace {
 
 constexpr size_t MAX_CONTEXT_DEPTH = 512;
 constexpr size_t MAX_HEAP_OBJECTS = 4000000;
+constexpr uint64_t NEW_SPACE_CHUNK = 1u << 20;
+// Class indices below this are the puns Spur uses for free chunks, forwarders
+// and the like.
+constexpr uint32_t FIRST_REAL_CLASS_INDEX = 32;
+constexpr int MAX_PRIORITY = 100;
 
 bool endsWithImage(const std::string& path) {
     static const std::string suffix = ".image";
@@ -173,19 +179,67 @@ std::vector<SpurProcess> OSVMDebugSession::processesInHeap() const {
         return false;
     };
 
+    // A live VM allocates past the end of the image it loaded, up to the bridge
+    // that ends its last segment.
     const uint64_t start = image->memoryReader()->baseAddress();
-    const uint64_t limit = image->memoryReader()->endAddress();
+    const uint64_t limit = image->memoryReader()->isLive() ? UINT64_MAX
+                                                           : image->memoryReader()->endAddress();
     SpurHeapObject object = image->heapObjectAt(start);
     size_t visited = 0;
     while (object.oop() >= start && object.oop() < limit && visited < MAX_HEAP_OBJECTS) {
+        if (object.header() == 0) break;
+        if (object.classIndex() == Spur::SEGMENT_BRIDGE && object.numSlots() == 0) break;
         const SpurHeapObject next = object.nextObject();
         if (next.oop() <= object.oop()) break;
         visited++;
         if (isProcessClass(SpurBehavior(object.spurClass()))) found.push_back(SpurProcess(object));
         object = next;
     }
+    addProcessesInNewSpace(found, isProcessClass);
     return found;
 }
+
+// New space has no walkable end without the VM's globals, and holds dead
+// objects past it, so it is searched for headers instead. A process created
+// since the image started lives there until it survives enough scavenges. The
+// VM reserves it in front of old space, in the same allocation.
+void OSVMDebugSession::addProcessesInNewSpace(
+    std::vector<SpurProcess>& found,
+    const std::function<bool(SpurBehavior)>& isProcessClass) const {
+    const uint64_t high = image->memoryReader()->baseAddress();
+    const uint64_t low = image->memoryReader()->allocationContaining(high).first;
+    std::map<uint32_t, bool> processIndices;
+    std::vector<uint64_t> words(NEW_SPACE_CHUNK / sizeof(uint64_t));
+    for (uint64_t chunk = low; chunk < high; chunk += NEW_SPACE_CHUNK) {
+        const size_t count = static_cast<size_t>(
+            std::min<uint64_t>(NEW_SPACE_CHUNK, high - chunk) / sizeof(uint64_t));
+        if (!image->memoryReader()->readBytes(chunk, words.data(), count * sizeof(uint64_t)))
+            continue;
+        for (size_t i = 0; i < count; i++) {
+            const uint64_t header = words[i];
+            if (((header >> Spur::FORMAT_SHIFT) & Spur::FORMAT_MASK) != Fmt::FIXED) continue;
+            const uint32_t classIndex = static_cast<uint32_t>(header & Spur::CLASS_INDEX_MASK);
+            if (classIndex < FIRST_REAL_CLASS_INDEX) continue;
+            auto known = processIndices.find(classIndex);
+            if (known == processIndices.end()) {
+                const uint64_t cls = image->classAtIndex(classIndex);
+                known = processIndices.emplace(classIndex,
+                    cls != 0 && isProcessClass(SpurBehavior(image->heapObjectAt(cls)))).first;
+            }
+            if (!known->second) continue;
+            const SpurProcess process(image->heapObjectAt(chunk + i * sizeof(uint64_t)));
+            if (looksLikeProcess(process)) found.push_back(process);
+        }
+    }
+}
+
+bool OSVMDebugSession::looksLikeProcess(const SpurProcess& process) const {
+    const int priority = process.priority();
+    if (priority < 1 || priority > MAX_PRIORITY) return false;
+    const SpurContext context = process.suspendedContext();
+    return !context || context.heapObject().format() == Fmt::FIXED_VARIABLE;
+}
+
 
 // Spur keeps activations in Context objects on the heap, so only the native
 // frame of the interpreter tells which thread runs it.

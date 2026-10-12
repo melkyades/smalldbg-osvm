@@ -17,6 +17,9 @@ namespace osvm {
  *  use the low 3 bits as a tag, so SmallIntegers have 61 bits. **/
 struct Spur {
     static constexpr uint64_t CLASS_INDEX_MASK = 0x3FFFFF;
+    /** SEGMENT_BRIDGE is the class index of the object that ends an old space
+     *  segment. It spans the gap to the next segment, and has no slots in the last one. **/
+    static constexpr uint32_t SEGMENT_BRIDGE   = 3;
     static constexpr int      FORMAT_SHIFT     = 24;
     static constexpr uint64_t FORMAT_MASK      = 0x1F;
     static constexpr int      HASH_SHIFT       = 32;
