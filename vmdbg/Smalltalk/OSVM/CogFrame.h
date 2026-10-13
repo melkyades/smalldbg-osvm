@@ -43,6 +43,8 @@ public:
     /** Returns the method the frame runs, or the one a block's code is part of. **/
     SpurCompiledMethod method() const;
     SpurObject receiver() const;
+    /** Returns the closure a block activation runs, or nil for a method. **/
+    SpurObject closure() const;
     /** Returns the Context married to the frame, or none when nothing asked for one. **/
     SpurContext context() const;
     /** Returns the arguments, then the values a block copied or a method's temporaries. **/

@@ -94,6 +94,9 @@ private:
      *  when its place in its method is not known. **/
     std::optional<size_t> bytecodeIndexOf(const std::vector<SpurActivation>& activations,
                                           size_t index) const;
+    /** Returns the names of an activation's arguments and temporaries, as far as its
+     *  method's source says them. **/
+    std::vector<std::string> temporaryNames(const SpurActivation& activation) const;
     /** Returns the frame pointer the running process is at, read once per stop. Returns
      *  0 for an image file, and when the VM's stack zone cannot be found. **/
     uint64_t runningFramePointer() const;

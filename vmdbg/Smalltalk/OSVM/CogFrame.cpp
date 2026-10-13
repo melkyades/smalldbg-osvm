@@ -166,6 +166,11 @@ SpurObject CogFrame::receiver() const {
     return image->objectAt(word(receiverOffset()));
 }
 
+SpurObject CogFrame::closure() const {
+    if (!isBlock()) return image->objectAt(image->nilObject());
+    return image->objectAt(word(stackedReceiverOffset()));
+}
+
 SpurContext CogFrame::context() const {
     if (!hasContext()) return SpurContext();
     return SpurContext(image->heapObjectAt(word(Cog::THIS_CONTEXT)));

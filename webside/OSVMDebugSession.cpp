@@ -23,6 +23,8 @@ constexpr uint64_t NEW_SPACE_CHUNK = 1u << 20;
 constexpr uint32_t FIRST_REAL_CLASS_INDEX = 32;
 constexpr int MAX_PRIORITY = 100;
 constexpr size_t MAX_STACK_SLOTS = 8192;
+// A BlockClosure's outerContext comes first, then the pc its body starts at.
+constexpr uint64_t BLOCK_START_PC = 1;
 // The JIT's first mapped instruction follows the method's header and a short
 // entry sequence.
 constexpr uint64_t MAX_MAPPED_CODE_OFFSET = 0x400;
@@ -52,6 +54,17 @@ void setMachineCode(Json& json, const std::vector<SpurActivation>& activations, 
     json.set("functionAddress", Json::hex(frame.codeStart()));
     if (uint64_t ip = frame.instructionPointer(calleeOnPage(activations, index)))
         json.set("ip", Json::hex(ip));
+}
+
+// Returns where the body of the block an activation runs starts, which its
+// closure knows, or 0 for a method activation and for a block without one.
+int blockStartOf(const SpurActivation& activation) {
+    if (!activation.isBlock()) return 0;
+    const SpurObject closure = activation.isFrame() ? activation.frame().closure()
+                                                    : activation.context().closure();
+    if (closure.isImmediate() || closure.isNil()) return 0;
+    const SpurObject start = closure.asHeapObject().slotAt(BLOCK_START_PC);
+    return start.isSmallInteger() ? static_cast<int>(start.asSmallInteger().value()) : 0;
 }
 
 bool endsWithImage(const std::string& path) {
@@ -404,6 +417,12 @@ std::optional<size_t> OSVMDebugSession::bytecodeIndexOf(
     return std::nullopt;
 }
 
+std::vector<std::string> OSVMDebugSession::temporaryNames(const SpurActivation& activation) const {
+    const SpurMethodMap& map = methodMap(activation.method());
+    if (const int start = blockStartOf(activation)) return map.blockNames(start);
+    return map.methodNames(activation.method().header().numTemps);
+}
+
 std::string OSVMDebugSession::frameLabel(const SpurActivation& activation) const {
     const auto* location = image->locationOfMethod(activation.method().oop());
 
@@ -481,6 +500,7 @@ std::string OSVMDebugSession::getSmalltalkFrameBindings(int threadIndex, int fra
     const SpurActivation& activation = activations[frameIndex - 1];
     const uint32_t numArgs = activation.isFrame() ? activation.frame().numArgs()
                                                   : activation.method().header().numArgs;
+    const std::vector<std::string> names = temporaryNames(activation);
 
     auto array = Json::array();
     const SpurObject receiver = activation.receiver();
@@ -496,7 +516,8 @@ std::string OSVMDebugSession::getSmalltalkFrameBindings(int threadIndex, int fra
         const bool isArgument = i < numArgs;
         const size_t ordinal = isArgument ? i + 1 : i - numArgs + 1;
         array.add(Json::object()
-            .set("name", (isArgument ? "arg" : "tmp") + std::to_string(ordinal))
+            .set("name", i < names.size() ? names[i]
+                                          : (isArgument ? "arg" : "tmp") + std::to_string(ordinal))
             .set("value", value.printString())
             .set("raw", Json::hex(value.oop()))
             .set("type", isArgument ? "argument" : "temporary"));
