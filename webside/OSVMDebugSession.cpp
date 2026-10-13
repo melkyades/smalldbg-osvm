@@ -23,6 +23,9 @@ constexpr uint64_t NEW_SPACE_CHUNK = 1u << 20;
 constexpr uint32_t FIRST_REAL_CLASS_INDEX = 32;
 constexpr int MAX_PRIORITY = 100;
 constexpr size_t MAX_STACK_SLOTS = 8192;
+// The JIT's first mapped instruction follows the method's header and a short
+// entry sequence.
+constexpr uint64_t MAX_MAPPED_CODE_OFFSET = 0x400;
 
 // Sets what identifies an activation: its Context, and for a frame its address,
 // which is all a frame the VM never made a Context for has.
@@ -31,17 +34,24 @@ void setIdentity(Json& json, const SpurActivation& activation) {
     if (activation.isFrame()) json.set("framePointer", Json::hex(activation.frame().framePointer()));
 }
 
-// Sets where a machine code frame's code starts and, when its callee is on the
-// same stack page, the ip the callee returns to. A base frame returns through
-// the VM instead.
+// Returns the frame the activation at `index` called, when it is on the same
+// stack page, or null. A base frame returns through the VM, so it does not say
+// where its caller is. The frame lives as long as `activations`.
+const CogFrame* calleeOnPage(const std::vector<SpurActivation>& activations, size_t index) {
+    if (index == 0 || !activations[index - 1].isFrame()) return nullptr;
+    const CogFrame& callee = activations[index - 1].frame();
+    return callee.isBase() ? nullptr : &callee;
+}
+
+// Sets where a machine code frame's code starts, and where in it the frame is
+// when that is known.
 void setMachineCode(Json& json, const std::vector<SpurActivation>& activations, size_t index) {
     const SpurActivation& activation = activations[index];
     if (!activation.isFrame() || !activation.frame().isMachineCode()) return;
-    json.set("functionAddress", Json::hex(activation.frame().codeStart()));
-    if (index == 0) return;
-    const SpurActivation& callee = activations[index - 1];
-    if (callee.isFrame() && !callee.frame().isBase())
-        json.set("ip", Json::hex(callee.frame().returnAddress()));
+    const CogFrame& frame = activation.frame();
+    json.set("functionAddress", Json::hex(frame.codeStart()));
+    if (uint64_t ip = frame.instructionPointer(calleeOnPage(activations, index)))
+        json.set("ip", Json::hex(ip));
 }
 
 bool endsWithImage(const std::string& path) {
@@ -333,6 +343,67 @@ std::string OSVMDebugSession::greenThreadOn(uint64_t nativeThreadId) const {
     return greenThreads[active].name;
 }
 
+const SpurMethodMap& OSVMDebugSession::methodMap(const SpurCompiledMethod& method) const {
+    if (methodMapsVersion != debugger().stateVersion()) {
+        methodMapsVersion = debugger().stateVersion();
+        methodMaps.clear();
+    }
+    auto& map = methodMaps[method.oop()];
+    if (!map) map = std::make_unique<SpurMethodMap>(method);
+    return *map;
+}
+
+std::optional<uint64_t> OSVMDebugSession::mappedCodeOffset() const {
+    if (codeOffsetVersion == debugger().stateVersion()) return codeOffset;
+    codeOffsetVersion = debugger().stateVersion();
+    std::map<uint64_t, int> fits;
+    const int count = greenThreadCount();
+    for (int t = 0; t < count; t++) {
+        const auto& activations = greenThreads[t].activations;
+        for (size_t i = 0; i < activations.size(); i++) {
+            if (!activations[i].isFrame() || !activations[i].frame().isMachineCode()) continue;
+            const CogFrame& frame = activations[i].frame();
+            const uint64_t ip = frame.instructionPointer(calleeOnPage(activations, i));
+            if (ip == 0) continue;
+            for (uint64_t offset : frame.sendReturnOffsets()) {
+                const uint64_t fit = ip - frame.methodCode() - offset;
+                if (fit < MAX_MAPPED_CODE_OFFSET) fits[fit]++;
+            }
+        }
+    }
+    codeOffset.reset();
+    int best = 0;
+    for (const auto& [offset, frames] : fits)
+        if (frames > best) { best = frames; codeOffset = offset; }
+    return codeOffset;
+}
+
+// An interpreter frame and a Context are at the bytecode their pc falls in; a
+// machine code frame at the send it returns from.
+std::optional<size_t> OSVMDebugSession::bytecodeIndexOf(
+    const std::vector<SpurActivation>& activations, size_t index) const {
+    const SpurActivation& activation = activations[index];
+    const SpurMethodMap& map = methodMap(activation.method());
+    if (!activation.isFrame()) {
+        const SpurObject pc = activation.context().programCounter();
+        if (!pc.isSmallInteger()) return std::nullopt;
+        return map.bytecodeAt(static_cast<int>(pc.asSmallInteger().value()) - 1);
+    }
+    const CogFrame& frame = activation.frame();
+    const uint64_t ip = frame.instructionPointer(calleeOnPage(activations, index));
+    if (ip == 0) return std::nullopt;
+    if (!frame.isMachineCode()) {
+        const uint64_t bytes = frame.method().oop() + Spur::BASE_HEADER_SIZE;
+        return map.bytecodeAt(static_cast<int>(ip - bytes) + 1);
+    }
+    const auto offset = mappedCodeOffset();
+    if (!offset) return std::nullopt;
+    const std::vector<uint64_t> sends = frame.sendReturnOffsets();
+    for (size_t k = 0; k < sends.size(); k++)
+        if (frame.methodCode() + *offset + sends[k] == ip) return map.compiledSend(k, sends.size());
+    return std::nullopt;
+}
+
 std::string OSVMDebugSession::frameLabel(const SpurActivation& activation) const {
     const auto* location = image->locationOfMethod(activation.method().oop());
 
@@ -392,10 +463,12 @@ std::string OSVMDebugSession::getSmalltalkFrameDetail(int threadIndex, int frame
     setIdentity(json, activation);
     setMachineCode(json, activations, static_cast<size_t>(frameIndex - 1));
 
-    // A married context's pc is the VM's to keep while its frame runs.
-    if (!activation.isFrame()) {
-        const SpurSmallInteger pc = activation.context().programCounter().asSmallInteger();
-        if (pc.isSmallInteger()) json.set("pc", pc.value());
+    const SpurMethodMap& map = methodMap(method);
+    if (auto index = bytecodeIndexOf(activations, static_cast<size_t>(frameIndex - 1))) {
+        smalltalk::FramePosition position;
+        position.bytecodePC = map.bytecodes()[*index].pc;
+        if (auto send = map.sourceOf(*index)) position.source = std::make_pair(send->start, send->end);
+        setFramePosition(json, position, json["method"]["source"].asString());
     }
     return json.dump();
 }

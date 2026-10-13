@@ -1,12 +1,59 @@
 #include "SpurMethodMap.h"
 
+#include <set>
+
 namespace osvm {
+
+namespace {
+
+// The JIT compiles these special selectors in place, with no send to fall back on.
+const std::set<std::string> sendlessSelectors = {"==", "~~", "class"};
+
+bool contains(const SistaV1Disassembler::Closure& block, int pc) {
+    return pc >= block.start && pc < block.end;
+}
+
+} // namespace
 
 SpurMethodMap::SpurMethodMap(const SpurCompiledMethod& method)
     : code(decodeMethod(method)), text(method.sourceCode()),
       tree(smalltalk::parseMethodSyntax(text)), numArgs(method.header().numArgs) {
+    orderCompiledSends();
     matchSources();
     matchBlocks();
+}
+
+std::optional<size_t> SpurMethodMap::bytecodeAt(int pc) const {
+    for (size_t i = 0; i < code.bytecodes.size(); i++) {
+        const auto& bytecode = code.bytecodes[i];
+        if (pc >= bytecode.pc && pc < bytecode.pc + static_cast<int>(bytecode.bytes.size()))
+            return i;
+    }
+    return std::nullopt;
+}
+
+// The JIT compiles the method's own bytecodes first, then each block's in the
+// order the blocks are created, each leaving out the blocks inside it.
+void SpurMethodMap::orderCompiledSends() {
+    const auto& blocks = code.closures;
+    const auto innermost = [&](int pc) {
+        int found = -1;
+        for (size_t b = 0; b < blocks.size(); b++)
+            if (contains(blocks[b], pc)) found = static_cast<int>(b);
+        return found;
+    };
+    for (int owner = -1; owner < static_cast<int>(blocks.size()); owner++) {
+        for (size_t i = 0; i < code.bytecodes.size(); i++) {
+            const auto& bytecode = code.bytecodes[i];
+            if (bytecode.selector.empty() || sendlessSelectors.count(bytecode.selector)) continue;
+            if (innermost(bytecode.pc) == owner) compiledSends.push_back(i);
+        }
+    }
+}
+
+std::optional<size_t> SpurMethodMap::compiledSend(size_t index, size_t count) const {
+    if (count != compiledSends.size() || index >= compiledSends.size()) return std::nullopt;
+    return compiledSends[index];
 }
 
 void SpurMethodMap::matchSources() {

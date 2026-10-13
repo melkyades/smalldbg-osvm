@@ -8,6 +8,9 @@ namespace {
 
 // More frames than a stack page can hold, so a corrupt chain still ends.
 constexpr size_t MAX_FRAMES_PER_PAGE = 4096;
+// How far below a frame's slots its pushed instruction is looked for: past the
+// arguments of the send it is making.
+constexpr size_t MAX_PUSHED_SLOTS = 64;
 
 uint8_t byteOf(uint64_t word, int index) {
     return static_cast<uint8_t>(word >> (8 * index));
@@ -73,6 +76,68 @@ uint64_t CogFrame::codeStart() const {
 
 uint64_t CogFrame::returnAddress() const {
     return word(Cog::CALLER_SAVED_IP);
+}
+
+uint64_t CogFrame::codeSize() const {
+    return readWord(homeCode + Cog::COG_BLOCK_SIZE) & Cog::COG_BLOCK_SIZE_MASK;
+}
+
+// Returns true when `address` is one of the frame's own instructions: a byte of
+// its method's bytecodes, or for a machine code frame an instruction of its
+// method's code.
+bool CogFrame::holdsOwnInstruction(uint64_t address) const {
+    if (machineCode) return address >= codeStart() && address < homeCode + codeSize();
+    const SpurCompiledMethod compiled = method();
+    const uint64_t bytes = compiled.oop() + Spur::BASE_HEADER_SIZE;
+    return address >= bytes + static_cast<uint64_t>(compiled.initialPC() - 1) &&
+           address < bytes + compiled.heapObject().byteSize();
+}
+
+// Returns the first of the frame's own instructions found below its slots: the
+// address the VM pushed for a frame it left at the top of a page, or the return
+// address of a call the frame is making. Returns 0 when there is none.
+uint64_t CogFrame::pushedInstructionPointer() const {
+    uint64_t address = lowestAddress();
+    for (size_t i = 0; i < MAX_PUSHED_SLOTS && address > Spur::BYTES_PER_OOP; i++) {
+        address -= Spur::BYTES_PER_OOP;
+        const uint64_t value = readWord(address);
+        if (holdsOwnInstruction(value)) return value;
+    }
+    return 0;
+}
+
+uint64_t CogFrame::instructionPointer(const CogFrame* callee) const {
+    if (callee == nullptr) return pushedInstructionPointer();
+    const uint64_t returnTo = callee->returnAddress();
+    if (holdsOwnInstruction(returnTo)) return returnTo;
+    // A call from an interpreter frame into machine code returns through the VM,
+    // which keeps the frame's own place in its saved ip slot.
+    if (!machineCode && holdsOwnInstruction(word(Cog::IFRAME_SAVED_IP))) return word(Cog::IFRAME_SAVED_IP);
+    return 0;
+}
+
+std::vector<uint64_t> CogFrame::sendReturnOffsets() const {
+    std::vector<uint64_t> offsets;
+    if (!machineCode) return offsets;
+    const size_t size = static_cast<size_t>(codeSize());
+    std::vector<uint8_t> code(size);
+    if (size == 0 || !image->memoryReader()->readBytes(homeCode, code.data(), size)) return offsets;
+
+    uint64_t pc = 0;
+    for (size_t map = size - 1; map > Cog::COG_METHOD_SIZE; map--) {
+        const uint8_t entry = code[map];
+        if (entry == Cog::MAP_END) break;
+        if (entry < Cog::MAP_FIRST_ANNOTATION) {
+            if ((entry >> Cog::MAP_ANNOTATION_SHIFT) != Cog::MAP_IS_EXTENSION)
+                pc += static_cast<uint64_t>(entry) << Cog::MAP_ANNOTATION_SHIFT;
+            continue;
+        }
+        pc += entry & Cog::MAP_DISPLACEMENT_MASK;
+        if ((entry >> Cog::MAP_ANNOTATION_SHIFT) != Cog::MAP_IS_SEND_CALL) continue;
+        offsets.push_back(pc);
+        if ((code[map - 1] >> Cog::MAP_ANNOTATION_SHIFT) == Cog::MAP_IS_EXTENSION) map--;
+    }
+    return offsets;
 }
 
 bool CogFrame::isBlock() const {

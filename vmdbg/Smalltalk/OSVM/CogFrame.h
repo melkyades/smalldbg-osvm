@@ -27,6 +27,16 @@ public:
     uint64_t codeStart() const;
     /** Returns where the frame returns to in its caller. **/
     uint64_t returnAddress() const;
+    /** Returns where the frame is: in machine code, or for an interpreter frame the
+     *  address of the last byte it fetched. `callee` is the frame it called, when that
+     *  is on the same page; otherwise the address the VM pushed above the frame's slots
+     *  is searched for. Returns 0 when neither says. **/
+    uint64_t instructionPointer(const CogFrame* callee) const;
+    /** Returns, for a machine code frame, where each send in its method's code returns
+     *  to, as offsets from the method's first mapped instruction, in code order. **/
+    std::vector<uint64_t> sendReturnOffsets() const;
+    /** Returns the address the method's code starts at, its header included. **/
+    uint64_t methodCode() const { return homeCode; }
     bool isBlock() const;
     bool hasContext() const;
     uint32_t numArgs() const { return argumentCount; }
@@ -68,6 +78,10 @@ private:
     /** Returns how many values sit below the receiver: a method's temporaries, or the
      *  values a block copied. **/
     uint64_t localCount() const;
+    /** Returns the bytes a machine code frame's method's code takes, its map included. **/
+    uint64_t codeSize() const;
+    bool holdsOwnInstruction(uint64_t address) const;
+    uint64_t pushedInstructionPointer() const;
 
     uint64_t fp{0};
     const SpurImage* image{nullptr};

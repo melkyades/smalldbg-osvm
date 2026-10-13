@@ -33,6 +33,8 @@ struct Cog {
     // method's, homeOffset bytes in, unless it is a full block of its own.
     static constexpr uint64_t COG_HOME_OFFSET   = 0;
     static constexpr uint64_t COG_FLAGS         = 8;
+    static constexpr uint64_t COG_BLOCK_SIZE    = 12;  // the whole method's bytes
+    static constexpr uint64_t COG_BLOCK_SIZE_MASK = 0xFFFF;
     static constexpr uint64_t COG_METHOD_OBJECT = 16;
     static constexpr uint64_t COG_METHOD_HEADER = 24;
     static constexpr uint64_t COG_METHOD_SIZE   = 40;  // the code follows
@@ -41,6 +43,17 @@ struct Cog {
     static constexpr uint64_t COG_NUM_ARGS_MASK = 0xFF;
     static constexpr uint64_t COG_HOME_MASK     = 0xFFFF;
     static constexpr uint64_t CM_METHOD         = 5;
+
+    // The map from machine code to bytecode sits at the end of a method's code and is
+    // read backwards. Each byte is an annotation in its top bits and how far past the
+    // previous one it is in the rest, or a long displacement; a send may be followed
+    // by an extension that says which kind.
+    static constexpr int     MAP_ANNOTATION_SHIFT = 5;
+    static constexpr uint8_t MAP_DISPLACEMENT_MASK = 0x1F;
+    static constexpr uint8_t MAP_FIRST_ANNOTATION = 64;
+    static constexpr uint8_t MAP_END = 0;
+    static constexpr uint8_t MAP_IS_EXTENSION = 1;
+    static constexpr uint8_t MAP_IS_SEND_CALL = 7;
 };
 
 } // namespace osvm

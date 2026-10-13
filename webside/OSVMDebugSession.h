@@ -4,11 +4,14 @@
 #include "Smalltalk/OSVM/OSVMInspector.h"
 #include "Smalltalk/Session.h"
 #include "Smalltalk/OSVM/SpurActivation.h"
+#include "Smalltalk/OSVM/SpurMethodMap.h"
 #include "Smalltalk/OSVM/SpurImage.h"
 #include "Smalltalk/OSVM/SpurImageFile.h"
 #include "Smalltalk/OSVM/SpurProcessMemory.h"
 #include <functional>
+#include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -81,6 +84,16 @@ private:
         std::vector<SpurActivation> activations;
     };
     std::string frameLabel(const SpurActivation& activation) const;
+    /** Returns the method's map, which is kept until the target moves. **/
+    const SpurMethodMap& methodMap(const SpurCompiledMethod& method) const;
+    /** Returns how far past a compiled method's start its first mapped instruction is,
+     *  or nothing when no running frame says. The VM decides that as it starts, so it
+     *  is found as the offset that puts the running frames' return addresses on sends. **/
+    std::optional<uint64_t> mappedCodeOffset() const;
+    /** Returns the index of the bytecode the activation at `index` is at, or nothing
+     *  when its place in its method is not known. **/
+    std::optional<size_t> bytecodeIndexOf(const std::vector<SpurActivation>& activations,
+                                          size_t index) const;
     /** Returns the frame pointer the running process is at, read once per stop. Returns
      *  0 for an image file, and when the VM's stack zone cannot be found. **/
     uint64_t runningFramePointer() const;
@@ -103,6 +116,10 @@ private:
     mutable uint64_t framePointerVersion{UINT64_MAX};
     mutable uint64_t framePointer{0};
     std::vector<GreenThread> greenThreads;
+    mutable std::map<uint64_t, std::unique_ptr<SpurMethodMap>> methodMaps;
+    mutable uint64_t methodMapsVersion{UINT64_MAX};
+    mutable std::optional<uint64_t> codeOffset;
+    mutable uint64_t codeOffsetVersion{UINT64_MAX};
     std::string lastError;
     std::string imagePath;
 };
