@@ -3,7 +3,7 @@
 #include "SpurImage.h"
 #include "SpurImageFile.h"
 #include "SpurKnownObjects.h"
-#include "SistaV1Disassembler.h"
+#include "SpurMethodMap.h"
 #include <set>
 #include <limits>
 #include <vector>
@@ -258,13 +258,16 @@ int main(int argc, char** argv) {
     check(missing == 0, "every method has source");
 
     // Every method decodes into bytecodes that cover its bytes exactly, with
-    // every jump landing on a bytecode.
+    // every jump landing on a bytecode. The source places the sends and blocks
+    // of nearly every method; the rest are reported.
     size_t decoded = 0, badBytes = 0, badJumps = 0, unassigned = 0;
+    size_t sendsPlaced = 0, withSends = 0, blocksNamed = 0, withBlocks = 0;
     for (const auto& [name, entry] : image.classes()) {
         for (uint64_t side : {entry.oop, entry.metaclass}) {
             for (const auto& method : image.methodsOf(side)) {
                 const osvm::SpurCompiledMethod compiled = image.methodAt(method.oop);
-                const auto bytecodes = osvm::decodeMethod(compiled).bytecodes;
+                const osvm::SpurMethodMap map(compiled);
+                const auto& bytecodes = map.bytecodes();
                 decoded++;
                 size_t bytes = 0;
                 std::set<int> starts;
@@ -278,14 +281,28 @@ int main(int argc, char** argv) {
                 for (const auto& bytecode : bytecodes)
                     if (bytecode.target && *bytecode.target != end && !starts.count(*bytecode.target))
                         badJumps++;
+                for (size_t i = 0; i < bytecodes.size(); i++) {
+                    if (bytecodes[i].selector.empty()) continue;
+                    withSends++;
+                    sendsPlaced += map.sourceOf(i).has_value();
+                    break;
+                }
+                if (!osvm::decodeMethod(compiled).closures.empty()) {
+                    withBlocks++;
+                    blocksNamed += map.namesBlocks();
+                }
             }
         }
     }
     std::cout << "methods decoded: " << decoded << " bad byte counts: " << badBytes
               << " bad jumps: " << badJumps << " unassigned: " << unassigned << std::endl;
+    std::cout << "sends placed in source: " << sendsPlaced << "/" << withSends
+              << ", blocks named: " << blocksNamed << "/" << withBlocks << std::endl;
     check(badBytes == 0, "every method's bytecodes cover its bytes");
     check(badJumps == 0, "every jump lands on a bytecode");
     check(unassigned == 0, "no method uses an unassigned bytecode");
+    check(sendsPlaced * 100 >= withSends * 95, "the source places the sends of most methods");
+    check(blocksNamed * 100 >= withBlocks * 97, "the source names the blocks of most methods");
 
     std::cout << "\n--- Object>>printOn: ---\n" << source << std::endl;
     std::cout << "\n--- Object definition ---\n"

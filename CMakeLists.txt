@@ -10,6 +10,8 @@ add_library(vmdbg_osvm STATIC
     vmdbg/Smalltalk/OSVM/SpurImageFile.cpp
     vmdbg/Smalltalk/OSVM/SpurKnownObjects.cpp
     vmdbg/Smalltalk/OSVM/SistaV1Disassembler.cpp
+    vmdbg/Smalltalk/OSVM/SpurMethodMap.cpp
+    vmdbg/Smalltalk/OSVM/SqueakSendOrder.cpp
     vmdbg/Smalltalk/OSVM/SpurActivation.cpp
     vmdbg/Smalltalk/OSVM/SpurProcessMemory.cpp
     vmdbg/Smalltalk/OSVM/SpurSourceFiles.cpp
