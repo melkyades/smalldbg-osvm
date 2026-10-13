@@ -163,6 +163,10 @@ public:
     /** Returns the method's header word, read through its machine code when the JIT
      *  compiled it. **/
     int64_t headerValue() const;
+    /** Returns the pc of the first bytecode, counted from 1 at the header word. **/
+    int initialPC() const;
+    /** Returns the bytecodes, without the trailer that follows them. **/
+    std::vector<uint8_t> bytecodes() const;
 
     std::vector<SpurObject> literals() const;
     /** Returns the method's source pointer, or 0 when it has none. **/

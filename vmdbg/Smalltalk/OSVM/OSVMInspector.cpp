@@ -1,4 +1,5 @@
 #include "OSVMInspector.h"
+#include "SistaV1Disassembler.h"
 #include "CogFrame.h"
 #include <smalldbg/Debugger.h>
 #include <smalldbg/symbols/SymbolProvider.h>
@@ -86,6 +87,10 @@ std::vector<smalltalk::MethodEntry> OSVMInspector::methodsOf(
 
 std::string OSVMInspector::sourceOf(const smalltalk::MethodEntry& method) const {
     return image->sourceOfMethod(method.oop);
+}
+
+std::vector<smalltalk::Bytecode> OSVMInspector::bytecodesOf(const smalltalk::MethodEntry& method) const {
+    return decodeMethod(image->methodAt(method.oop)).bytecodes;
 }
 
 std::vector<smalltalk::ClassVariable> OSVMInspector::classVariablesOf(

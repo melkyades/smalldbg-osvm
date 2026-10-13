@@ -32,6 +32,7 @@ public:
     std::vector<smalltalk::MethodEntry> methodsOf(
         const std::string& className) const override;
     std::string sourceOf(const smalltalk::MethodEntry& method) const override;
+    std::vector<smalltalk::Bytecode> bytecodesOf(const smalltalk::MethodEntry& method) const override;
     std::vector<smalltalk::ClassVariable> classVariablesOf(
         const std::string& className) const override;
 

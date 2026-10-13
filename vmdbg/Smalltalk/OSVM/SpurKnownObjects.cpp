@@ -216,6 +216,32 @@ std::vector<SpurObject> SpurCompiledMethod::literals() const {
     return found;
 }
 
+int SpurCompiledMethod::initialPC() const {
+    return static_cast<int>((header().numLiterals + 1) * Spur::BYTES_PER_OOP + 1);
+}
+
+// The last byte says how long the trailer is: from 252 up it ends a four-byte
+// source pointer, 0 ends up to four zero bytes, and any other value is how many
+// bytes come before it.
+std::vector<uint8_t> SpurCompiledMethod::bytecodes() const {
+    if (!heap.isPresent()) return {};
+    const std::string body = heap.bytesAsString();
+    const size_t first = static_cast<size_t>(initialPC() - 1);
+    if (body.size() <= first) return {};
+    const uint8_t flag = static_cast<uint8_t>(body.back());
+    size_t end = body.size();
+    if (flag > TRAILER_BASE) {
+        end -= TRAILER_BYTES;
+    } else if (flag == 0) {
+        while (end > first && end + TRAILER_BYTES > body.size() && body[end - 1] == 0) end--;
+    } else {
+        end = flag + 1u <= end ? end - flag - 1 : first;
+    }
+    if (end < first) end = first;
+    return std::vector<uint8_t>(body.begin() + static_cast<long>(first),
+                                body.begin() + static_cast<long>(end));
+}
+
 uint64_t SpurCompiledMethod::sourcePointer() const {
     if (!heap.isPresent()) return 0;
 

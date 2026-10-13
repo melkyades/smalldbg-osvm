@@ -3,6 +3,8 @@
 #include "SpurImage.h"
 #include "SpurImageFile.h"
 #include "SpurKnownObjects.h"
+#include "SistaV1Disassembler.h"
+#include <set>
 #include <limits>
 #include <vector>
 #include <iostream>
@@ -254,6 +256,36 @@ int main(int argc, char** argv) {
               << " missing source: " << missing << std::endl;
     check(mismatched == 0, "every method's source begins with its selector");
     check(missing == 0, "every method has source");
+
+    // Every method decodes into bytecodes that cover its bytes exactly, with
+    // every jump landing on a bytecode.
+    size_t decoded = 0, badBytes = 0, badJumps = 0, unassigned = 0;
+    for (const auto& [name, entry] : image.classes()) {
+        for (uint64_t side : {entry.oop, entry.metaclass}) {
+            for (const auto& method : image.methodsOf(side)) {
+                const osvm::SpurCompiledMethod compiled = image.methodAt(method.oop);
+                const auto bytecodes = osvm::decodeMethod(compiled).bytecodes;
+                decoded++;
+                size_t bytes = 0;
+                std::set<int> starts;
+                for (const auto& bytecode : bytecodes) {
+                    bytes += bytecode.bytes.size();
+                    starts.insert(bytecode.pc);
+                    if (bytecode.text == "unassigned") unassigned++;
+                }
+                if (bytes != compiled.bytecodes().size()) badBytes++;
+                const int end = compiled.initialPC() + static_cast<int>(bytes);
+                for (const auto& bytecode : bytecodes)
+                    if (bytecode.target && *bytecode.target != end && !starts.count(*bytecode.target))
+                        badJumps++;
+            }
+        }
+    }
+    std::cout << "methods decoded: " << decoded << " bad byte counts: " << badBytes
+              << " bad jumps: " << badJumps << " unassigned: " << unassigned << std::endl;
+    check(badBytes == 0, "every method's bytecodes cover its bytes");
+    check(badJumps == 0, "every jump lands on a bytecode");
+    check(unassigned == 0, "no method uses an unassigned bytecode");
 
     std::cout << "\n--- Object>>printOn: ---\n" << source << std::endl;
     std::cout << "\n--- Object definition ---\n"
