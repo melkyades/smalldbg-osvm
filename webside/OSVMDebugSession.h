@@ -49,6 +49,7 @@ public:
     int greenThreadCount() const override;
     std::string getGreenThreadName(int threadIndex) const override;
     int activeGreenThread() const override;
+    bool isGreenThreadLive(int threadIndex) const override;
     std::string greenThreadOn(uint64_t nativeThreadId) const override;
     std::string listSmalltalkFrames(int threadIndex) const override;
     std::string getSmalltalkFrameDetail(int threadIndex, int frameIndex) const override;
@@ -97,6 +98,9 @@ private:
     /** Returns the names of an activation's arguments and temporaries, as far as its
      *  method's source says them. **/
     std::vector<std::string> temporaryNames(const SpurActivation& activation) const;
+    /** Returns the pc the activation at `index` runs next, or nothing when it is not
+     *  known. A Context that has returned has no pc, and returns 0. **/
+    std::optional<int> nextPCOf(const std::vector<SpurActivation>& activations, size_t index) const;
     /** Returns the frame pointer the running process is at, read once per stop. Returns
      *  0 for an image file, and when the VM's stack zone cannot be found. **/
     uint64_t runningFramePointer() const;

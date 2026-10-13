@@ -417,6 +417,39 @@ std::optional<size_t> OSVMDebugSession::bytecodeIndexOf(
     return std::nullopt;
 }
 
+std::optional<int> OSVMDebugSession::nextPCOf(const std::vector<SpurActivation>& activations,
+                                              size_t index) const {
+    const SpurActivation& activation = activations[index];
+    if (!activation.isFrame()) {
+        const SpurObject pc = activation.context().programCounter();
+        if (pc.isNil()) return 0;
+        if (!pc.isSmallInteger()) return std::nullopt;
+        return static_cast<int>(pc.asSmallInteger().value());
+    }
+    const auto bytecode = bytecodeIndexOf(activations, index);
+    if (!bytecode) return std::nullopt;
+    const auto& found = methodMap(activation.method()).bytecodes()[*bytecode];
+    return found.pc + static_cast<int>(found.bytes.size());
+}
+
+// Applies the image's own Process>>isTerminated: a process that is not running
+// is terminated when none of its activations has code left to run. A process
+// whose place is not known counts as live.
+bool OSVMDebugSession::isGreenThreadLive(int threadIndex) const {
+    if (threadIndex < 0 || threadIndex >= greenThreadCount()) return false;
+    const GreenThread& thread = greenThreads[threadIndex];
+    if (thread.active) return true;
+    const auto& activations = thread.activations;
+    for (size_t i = 0; i < activations.size(); i++) {
+        const auto pc = nextPCOf(activations, i);
+        if (!pc) return true;
+        if (*pc == 0) continue;
+        const int blockStart = blockStartOf(activations[i]);
+        if (!methodMap(activations[i].method()).isAtEnd(*pc, blockStart)) return true;
+    }
+    return false;
+}
+
 std::vector<std::string> OSVMDebugSession::temporaryNames(const SpurActivation& activation) const {
     const SpurMethodMap& map = methodMap(activation.method());
     if (const int start = blockStartOf(activation)) return map.blockNames(start);

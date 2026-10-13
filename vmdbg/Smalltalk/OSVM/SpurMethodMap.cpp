@@ -32,6 +32,17 @@ std::optional<size_t> SpurMethodMap::bytecodeAt(int pc) const {
     return std::nullopt;
 }
 
+bool SpurMethodMap::isAtEnd(int pc, int blockStart) const {
+    if (code.bytecodes.empty()) return false;
+    if (blockStart == 0) {
+        const auto& last = code.bytecodes.back();
+        return pc >= last.pc + static_cast<int>(last.bytes.size()) - 1;
+    }
+    for (const auto& block : code.closures)
+        if (block.start == blockStart) return pc == block.end - 1;
+    return false;
+}
+
 // The JIT compiles the method's own bytecodes first, then each block's in the
 // order the blocks are created, each leaving out the blocks inside it.
 void SpurMethodMap::orderCompiledSends() {

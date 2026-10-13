@@ -25,6 +25,10 @@ public:
     /** Returns the index of the bytecode that holds the byte at `pc`, or nothing when
      *  no bytecode does. **/
     std::optional<size_t> bytecodeAt(int pc) const;
+    /** Returns true when an activation about to run `pc` has nothing left to run, as
+     *  ContextPart>>isDone tests it: a method's pc is at or past its last byte, and
+     *  that of the block starting at `blockStart` at the block's last byte. **/
+    bool isAtEnd(int pc, int blockStart) const;
     /** Returns the bytecode of the `index`th send the JIT compiled, when the method's
      *  machine code makes `count` sends, as many as its bytecodes call for. **/
     std::optional<size_t> compiledSend(size_t index, size_t count) const;
