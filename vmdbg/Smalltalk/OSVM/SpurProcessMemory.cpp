@@ -230,8 +230,8 @@ std::pair<uint64_t, uint64_t> SpurProcessMemory::allocationContaining(uint64_t a
 
 #else
 
-std::pair<uint64_t, uint64_t> SpurProcessMemory::allocationContaining(uint64_t) const {
-    return {0, 0};
+std::pair<uint64_t, uint64_t> SpurProcessMemory::allocationContaining(uint64_t address) const {
+    return reader->allocationContaining(address);
 }
 
 bool SpurProcessMemory::rootsFromPrologueScan(SpurRoots&, uint64_t, uint64_t,
