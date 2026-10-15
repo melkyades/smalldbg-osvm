@@ -67,6 +67,16 @@ int blockStartOf(const SpurActivation& activation) {
     return start.isSmallInteger() ? static_cast<int>(start.asSmallInteger().value()) : 0;
 }
 
+// A method the class index does not hold, such as one of a class whose entry
+// in Smalltalk a recording never read, still names itself through its
+// literals.
+std::string nameFromLiterals(const SpurCompiledMethod& method) {
+    const std::string className = method.methodClassName();
+    const std::string selector = method.selector();
+    if (className.empty() || selector.empty()) return "a CompiledMethod";
+    return className + ">>" + selector;
+}
+
 bool endsWithImage(const std::string& path) {
     static const std::string suffix = ".image";
     return path.size() > suffix.size() &&
@@ -478,7 +488,7 @@ std::string OSVMDebugSession::frameLabel(const SpurActivation& activation) const
 
     std::string label = location != nullptr
         ? location->className + ">>" + location->selector
-        : "a CompiledMethod";
+        : nameFromLiterals(activation.method());
 
     if (activation.isBlock()) label = "[] in " + label;
     return label;

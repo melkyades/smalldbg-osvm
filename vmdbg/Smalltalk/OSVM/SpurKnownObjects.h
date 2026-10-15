@@ -169,6 +169,12 @@ public:
     std::vector<uint8_t> bytecodes() const;
 
     std::vector<SpurObject> literals() const;
+    /** Returns the name of the class the method is installed in, from the
+     *  binding its last literal holds, or "" when it holds none. **/
+    std::string methodClassName() const;
+    /** Returns the selector the literal before the binding holds, or "" when
+     *  it holds none, as when the method keeps extra state there. **/
+    std::string selector() const;
     /** Returns the method's source pointer, or 0 when it has none. **/
     uint64_t sourcePointer() const;
     std::string sourceCode() const;

@@ -216,6 +216,20 @@ std::vector<SpurObject> SpurCompiledMethod::literals() const {
     return found;
 }
 
+std::string SpurCompiledMethod::methodClassName() const {
+    const std::vector<SpurObject> found = literals();
+    if (found.empty() || found.back().isImmediate()) return {};
+    const SpurObject cls = SpurAssociation(found.back().asHeapObject()).value();
+    return cls.isImmediate() ? std::string() : cls.asHeapObject().nameIfClass();
+}
+
+std::string SpurCompiledMethod::selector() const {
+    const std::vector<SpurObject> found = literals();
+    if (found.size() < 2 || found[found.size() - 2].isImmediate()) return {};
+    const SpurHeapObject name = found[found.size() - 2].asHeapObject();
+    return name.isBytes() ? name.stringValue() : std::string();
+}
+
 int SpurCompiledMethod::initialPC() const {
     return static_cast<int>((header().numLiterals + 1) * Spur::BYTES_PER_OOP + 1);
 }
