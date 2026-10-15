@@ -206,33 +206,7 @@ bool SpurProcessMemory::rootsFromPrologueScan(SpurRoots& found, uint64_t imageBa
     return true;
 }
 
-// An allocation is reported as a run of regions, each of one protection, that
-// share its base.
-std::pair<uint64_t, uint64_t> SpurProcessMemory::allocationContaining(uint64_t address) const {
-    auto pid = reader->attachedPid();
-    if (!pid || address == 0) return {0, 0};
-    HANDLE process = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, static_cast<DWORD>(*pid));
-    if (process == nullptr) return {0, 0};
-    MEMORY_BASIC_INFORMATION info;
-    uint64_t start = 0;
-    uint64_t end = 0;
-    if (VirtualQueryEx(process, reinterpret_cast<LPCVOID>(address), &info, sizeof(info)) != 0 &&
-        info.State != MEM_FREE) {
-        start = reinterpret_cast<uint64_t>(info.AllocationBase);
-        end = start;
-        while (VirtualQueryEx(process, reinterpret_cast<LPCVOID>(end), &info, sizeof(info)) != 0 &&
-               reinterpret_cast<uint64_t>(info.AllocationBase) == start)
-            end = reinterpret_cast<uint64_t>(info.BaseAddress) + info.RegionSize;
-    }
-    CloseHandle(process);
-    return {start, end};
-}
-
 #else
-
-std::pair<uint64_t, uint64_t> SpurProcessMemory::allocationContaining(uint64_t address) const {
-    return reader->allocationContaining(address);
-}
 
 bool SpurProcessMemory::rootsFromPrologueScan(SpurRoots&, uint64_t, uint64_t,
                                               std::string& why) const {
@@ -241,6 +215,10 @@ bool SpurProcessMemory::rootsFromPrologueScan(SpurRoots&, uint64_t, uint64_t,
 }
 
 #endif
+
+std::pair<uint64_t, uint64_t> SpurProcessMemory::allocationContaining(uint64_t address) const {
+    return reader->allocationContaining(address);
+}
 
 // A recording or a dump has no process to ask for its allocations, so the
 // interpreter's own record of where new space starts is preferred.
