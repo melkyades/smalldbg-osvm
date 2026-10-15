@@ -23,6 +23,9 @@ public:
     uint64_t endAddress() const override { return end; }
     bool isLive() const override { return true; }
     std::pair<uint64_t, uint64_t> allocationContaining(uint64_t address) const override;
+    /** Returns the interpreter's newSpaceStart when its symbols name it, and
+     *  otherwise the start of the allocation old space was reserved in. **/
+    uint64_t newSpaceStart() const override;
 
     const std::string& error() const { return lastError; }
 

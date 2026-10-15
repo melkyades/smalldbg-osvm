@@ -248,7 +248,8 @@ void OSVMDebugSession::addProcessesInNewSpace(
     std::vector<SpurProcess>& found,
     const std::function<bool(SpurBehavior)>& isProcessClass) const {
     const uint64_t high = image->memoryReader()->baseAddress();
-    const uint64_t low = image->memoryReader()->allocationContaining(high).first;
+    const uint64_t low = image->memoryReader()->newSpaceStart();
+    if (low == 0 || low >= high) return;
     std::map<uint32_t, bool> processIndices;
     std::vector<uint64_t> words(NEW_SPACE_CHUNK / sizeof(uint64_t));
     for (uint64_t chunk = low; chunk < high; chunk += NEW_SPACE_CHUNK) {

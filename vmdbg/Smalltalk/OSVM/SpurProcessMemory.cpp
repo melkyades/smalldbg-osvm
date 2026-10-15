@@ -24,6 +24,7 @@ constexpr const char* SYM_FALSE        = "falseObj";
 constexpr const char* SYM_TRUE         = "trueObj";
 constexpr const char* SYM_HIDDEN_ROOTS = "hiddenRootsObj";
 constexpr const char* SYM_SPECIAL_OOPS = "specialObjectsOop";
+constexpr const char* SYM_NEW_SPACE_START = "newSpaceStart";
 
 // Every Spur heap opens with nil, false and true: three zero-slot objects at
 // 16-byte spacing whose class indices are fixed by the bootstrap.
@@ -240,6 +241,14 @@ bool SpurProcessMemory::rootsFromPrologueScan(SpurRoots&, uint64_t, uint64_t,
 }
 
 #endif
+
+// A recording or a dump has no process to ask for its allocations, so the
+// interpreter's own record of where new space starts is preferred.
+uint64_t SpurProcessMemory::newSpaceStart() const {
+    uint64_t start = 0;
+    if (readGlobalOop(SYM_NEW_SPACE_START, start) && start != 0) return start;
+    return allocationContaining(base).first;
+}
 
 bool SpurProcessMemory::locateRoots(uint64_t imageBase, uint64_t imageEnd,
                                     uint64_t imageSpecialObjects) {

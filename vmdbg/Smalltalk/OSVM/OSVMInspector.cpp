@@ -39,8 +39,10 @@ bool OSVMInspector::refreshRegions() {
 void OSVMInspector::addLiveRegions() {
     const SpurMemory& memory = *image->memoryReader();
     const uint64_t oldStart = image->objectMemoryBase();
-    const auto [heapStart, heapEnd] = memory.allocationContaining(oldStart);
-    if (heapStart < oldStart) addRegion(regionOf("newSpace", heapStart, oldStart, vmdbg::Region::Kind::Objects));
+    const auto heapEnd = memory.allocationContaining(oldStart).second;
+    const uint64_t newStart = memory.newSpaceStart();
+    if (newStart != 0 && newStart < oldStart)
+        addRegion(regionOf("newSpace", newStart, oldStart, vmdbg::Region::Kind::Objects));
     addRegion(regionOf("oldSpace", oldStart, heapEnd > oldStart ? heapEnd : image->objectMemoryEnd(),
                        vmdbg::Region::Kind::Objects));
     const auto [codeStart, codeEnd] = memory.allocationContaining(codeZoneAddress());

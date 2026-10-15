@@ -50,6 +50,10 @@ public:
         return {0, 0};
     }
 
+    /** Returns where new space starts, in front of old space. Returns 0 when
+     *  there is none or it cannot be found. **/
+    virtual uint64_t newSpaceStart() const { return 0; }
+
     /** Returns the word at `address`, or 0 when it cannot be read. **/
     uint64_t readWord(uint64_t address) const {
         uint64_t word = 0;
