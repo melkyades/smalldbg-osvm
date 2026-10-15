@@ -36,6 +36,10 @@ public:
      *  hint that says where the special objects array sits, since old space keeps its layout
      *  across a load. **/
     bool onTargetOpened(const vmdbg::TargetSpec& target) override;
+    /** Returns the VM's module, Squeak. The interpreter globals the heap is
+     *  found through, such as nilObj, are static, so only its symbol file
+     *  names them: a pdb on Windows, where recordings are made. **/
+    vmdbg::VMModule vmModule() const override;
     bool readsWithoutEngine(const vmdbg::TargetSpec& target) const override;
     const char* dialectTag() const override { return "osvm"; }
 

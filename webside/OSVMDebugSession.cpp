@@ -148,6 +148,13 @@ bool OSVMDebugSession::readsWithoutEngine(const vmdbg::TargetSpec& target) const
     return target.kind == vmdbg::TargetKind::Launch && endsWithImage(target.path);
 }
 
+vmdbg::VMModule OSVMDebugSession::vmModule() const {
+    return {"Squeak", true,
+            "the interpreter globals the heap is found through -- nilObj,"
+            " specialObjectsOop -- are static, and a recording has no process"
+            " to scan for the heap instead."};
+}
+
 // However the VM was reached, what this needs from it is the same: the roots,
 // read out of the live heap. A launch is the one that has to wait first, since
 // the VM has not read its image in yet.
