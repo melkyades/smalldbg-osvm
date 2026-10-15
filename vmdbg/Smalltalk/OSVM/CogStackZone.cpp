@@ -38,9 +38,12 @@ std::shared_ptr<smalldbg::Thread> CogStackZone::threadHolding(uint64_t framePoin
     for (const auto& thread : process->threads()) {
         smalldbg::Registers regs;
         if (debugger->getRegisters(thread.get(), regs) != smalldbg::Status::Ok) continue;
+        // A thread in machine code runs on the stack pages themselves, so its
+        // stack pointer can sit above a frame pointer the VM saved earlier.
         const uint64_t sp = regs.sp();
-        if (sp == 0 || sp > framePointer || framePointer - sp >= nearest) continue;
-        nearest = framePointer - sp;
+        const uint64_t distance = sp > framePointer ? sp - framePointer : framePointer - sp;
+        if (sp == 0 || distance >= nearest) continue;
+        nearest = distance;
         holder = thread;
     }
     return holder;
