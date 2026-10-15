@@ -12,6 +12,12 @@ namespace {
 // The global a Cog VM keeps the start of its machine code zone in.
 constexpr const char* SYM_METHOD_ZONE_BASE = "methodZoneBase";
 
+// The globals a VM keeps its screen in: a pointer to the pixels, and ints.
+constexpr const char* SYM_DISPLAY_BITS = "displayBits";
+constexpr const char* SYM_DISPLAY_WIDTH = "displayWidth";
+constexpr const char* SYM_DISPLAY_HEIGHT = "displayHeight";
+constexpr const char* SYM_DISPLAY_DEPTH = "displayDepth";
+
 // Reads a picture of `width` x `height` pixels of `depth` bits from
 // `pixels`, refusing sizes no screen has and more than `capacity` bytes.
 std::optional<vmdbg::Framebuffer> readFrame(const SpurMemory& memory, uint64_t pixels,
@@ -129,11 +135,42 @@ std::vector<smalltalk::ClassVariable> OSVMInspector::classVariablesOf(
     return variables;
 }
 
+// The VM keeps where the screen's pixels are and their size in globals, set
+// whenever the image installs its display and again when a collection moves
+// it. They are read on every screen update, so a recording that touched little
+// else of the VM still holds them. The Form is read when there are no symbols
+// to find them by.
+std::optional<vmdbg::Framebuffer> OSVMInspector::framebuffer() const {
+    if (auto frame = framebufferFromVM()) return frame;
+    return framebufferFromDisplay();
+}
+
+std::optional<vmdbg::Framebuffer> OSVMInspector::framebufferFromVM() const {
+    SpurMemory* memory = image->memoryReader();
+    smalldbg::Debugger* debugger = memory->debugger();
+    auto* symbols = debugger ? debugger->getSymbolProvider() : nullptr;
+    if (symbols == nullptr) return std::nullopt;
+    auto bits = symbols->getSymbolByName(SYM_DISPLAY_BITS);
+    auto width = symbols->getSymbolByName(SYM_DISPLAY_WIDTH);
+    auto height = symbols->getSymbolByName(SYM_DISPLAY_HEIGHT);
+    auto depth = symbols->getSymbolByName(SYM_DISPLAY_DEPTH);
+    if (!bits || !width || !height || !depth) return std::nullopt;
+
+    uint64_t pixels = 0;
+    int32_t sizes[3] = {0, 0, 0};
+    if (!memory->readBytes(bits->address, &pixels, sizeof(pixels))
+            || !memory->readBytes(width->address, &sizes[0], sizeof(int32_t))
+            || !memory->readBytes(height->address, &sizes[1], sizeof(int32_t))
+            || !memory->readBytes(depth->address, &sizes[2], sizeof(int32_t)))
+        return std::nullopt;
+    return readFrame(*memory, pixels, sizes[0], sizes[1], sizes[2], UINT64_MAX);
+}
+
 // The image draws into the Form the special objects array holds as the
 // display. A Form starts with the instance variables bits, width, height and
 // depth; a negative depth means little-endian pixels, which changes nothing
 // for a 32-bit pixel.
-std::optional<vmdbg::Framebuffer> OSVMInspector::framebuffer() const {
+std::optional<vmdbg::Framebuffer> OSVMInspector::framebufferFromDisplay() const {
     const uint64_t display = image->specialObject(SpecialObject::THE_DISPLAY);
     if (display == 0 || Spur::isSmallInteger(display)) return std::nullopt;
 

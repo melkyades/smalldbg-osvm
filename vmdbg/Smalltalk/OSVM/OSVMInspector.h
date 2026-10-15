@@ -35,8 +35,8 @@ public:
     std::vector<smalltalk::Bytecode> bytecodesOf(const smalltalk::MethodEntry& method) const override;
     std::vector<smalltalk::ClassVariable> classVariablesOf(
         const std::string& className) const override;
-    /** Reads the screen the VM shows from the display Form, or nothing when
-     *  the image has none. **/
+    /** Reads the screen the VM shows: through the VM's display globals when
+     *  its symbols name them, otherwise from the display Form. **/
     std::optional<vmdbg::Framebuffer> framebuffer() const override;
 
     /** Returns where a live Cog VM runs its processes, or null for an image file. It
@@ -45,6 +45,12 @@ public:
 
 private:
     void addLiveRegions();
+    /** Returns the screen the VM's display globals point at, or nothing when
+     *  there are no symbols for them. **/
+    std::optional<vmdbg::Framebuffer> framebufferFromVM() const;
+    /** Returns the screen held by the display Form, or nothing when the image
+     *  has none. **/
+    std::optional<vmdbg::Framebuffer> framebufferFromDisplay() const;
     /** Returns an address inside the zone the JIT compiles methods into, or 0 when
      *  neither the VM's symbols nor the running process say where it is. **/
     uint64_t codeZoneAddress() const;
