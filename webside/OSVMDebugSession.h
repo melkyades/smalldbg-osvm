@@ -40,6 +40,11 @@ public:
      *  found through, such as nilObj, are static, so only its symbol file
      *  names them: a pdb on Windows, where recordings are made. **/
     vmdbg::VMModule vmModule() const override;
+    /** Returns the GDI calls the Windows VM copies its display to the window
+     *  with. Recent Windows forwards gdi32's exports to gdi32full, and which
+     *  one a call lands in depends on how the VM imported it, so both are
+     *  given. Other systems name none yet. **/
+    std::vector<std::string> screenUpdateFunctions() const override;
     bool readsWithoutEngine(const vmdbg::TargetSpec& target) const override;
     const char* dialectTag() const override { return "osvm"; }
 

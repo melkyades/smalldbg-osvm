@@ -155,6 +155,15 @@ vmdbg::VMModule OSVMDebugSession::vmModule() const {
             " to scan for the heap instead."};
 }
 
+std::vector<std::string> OSVMDebugSession::screenUpdateFunctions() const {
+#ifdef _WIN32
+    return {"gdi32!SetDIBitsToDevice", "gdi32!StretchDIBits",
+            "gdi32full!SetDIBitsToDevice", "gdi32full!StretchDIBits"};
+#else
+    return {};
+#endif
+}
+
 // However the VM was reached, what this needs from it is the same: the roots,
 // read out of the live heap. A launch is the one that has to wait first, since
 // the VM has not read its image in yet.
