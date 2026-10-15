@@ -165,6 +165,7 @@ struct SpecialObject {
     static constexpr uint64_t TRUE             = 2;
     static constexpr uint64_t SCHEDULER_ASSOC  = 3;
     static constexpr uint64_t SMALLTALK        = 8;
+    static constexpr uint64_t THE_DISPLAY      = 14;
     static constexpr uint64_t COMPILED_METHOD  = 16;
 };
 

@@ -35,6 +35,9 @@ public:
     std::vector<smalltalk::Bytecode> bytecodesOf(const smalltalk::MethodEntry& method) const override;
     std::vector<smalltalk::ClassVariable> classVariablesOf(
         const std::string& className) const override;
+    /** Reads the screen the VM shows from the display Form, or nothing when
+     *  the image has none. **/
+    std::optional<vmdbg::Framebuffer> framebuffer() const override;
 
     /** Returns where a live Cog VM runs its processes, or null for an image file. It
      *  lives as long as the inspector. **/

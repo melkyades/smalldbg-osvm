@@ -3,6 +3,7 @@
 #include "CogFrame.h"
 #include <smalldbg/Debugger.h>
 #include <smalldbg/symbols/SymbolProvider.h>
+#include <cstdlib>
 
 namespace osvm {
 
@@ -10,6 +11,30 @@ namespace {
 
 // The global a Cog VM keeps the start of its machine code zone in.
 constexpr const char* SYM_METHOD_ZONE_BASE = "methodZoneBase";
+
+// Reads a picture of `width` x `height` pixels of `depth` bits from
+// `pixels`, refusing sizes no screen has and more than `capacity` bytes.
+std::optional<vmdbg::Framebuffer> readFrame(const SpurMemory& memory, uint64_t pixels,
+                                            int64_t width, int64_t height, int64_t depth,
+                                            uint64_t capacity) {
+    depth = std::abs(depth);
+    if (pixels == 0 || width <= 0 || height <= 0 || width > 16384 || height > 16384
+            || depth <= 0 || depth > 32)
+        return std::nullopt;
+
+    // Rows are padded to whole 32-bit words.
+    const uint64_t rowBytes = (static_cast<uint64_t>(width) * depth + 31) / 32 * 4;
+    const uint64_t size = rowBytes * static_cast<uint64_t>(height);
+    if (size > capacity) return std::nullopt;
+
+    vmdbg::Framebuffer frame;
+    frame.width = static_cast<int>(width);
+    frame.height = static_cast<int>(height);
+    frame.depth = static_cast<int>(depth);
+    frame.pixels.resize(size);
+    if (!memory.readBytes(pixels, frame.pixels.data(), size)) return std::nullopt;
+    return frame;
+}
 
 vmdbg::Region regionOf(const char* name, uint64_t start, uint64_t end, vmdbg::Region::Kind kind) {
     vmdbg::Region region;
@@ -102,6 +127,26 @@ std::vector<smalltalk::ClassVariable> OSVMInspector::classVariablesOf(
          image->classVariablesOf(image->resolveClassOop(className)))
         variables.push_back({name, value});
     return variables;
+}
+
+// The image draws into the Form the special objects array holds as the
+// display. A Form starts with the instance variables bits, width, height and
+// depth; a negative depth means little-endian pixels, which changes nothing
+// for a 32-bit pixel.
+std::optional<vmdbg::Framebuffer> OSVMInspector::framebuffer() const {
+    const uint64_t display = image->specialObject(SpecialObject::THE_DISPLAY);
+    if (display == 0 || Spur::isSmallInteger(display)) return std::nullopt;
+
+    const uint64_t bits = image->slotOf(display, 0);
+    const uint64_t width = image->slotOf(display, 1);
+    const uint64_t height = image->slotOf(display, 2);
+    const uint64_t depth = image->slotOf(display, 3);
+    if (Spur::isSmallInteger(bits) || !Spur::isSmallInteger(width)
+            || !Spur::isSmallInteger(height) || !Spur::isSmallInteger(depth))
+        return std::nullopt;
+    return readFrame(*image->memoryReader(), bits + Spur::BASE_HEADER_SIZE,
+                     Spur::smallIntegerValue(width), Spur::smallIntegerValue(height),
+                     Spur::smallIntegerValue(depth), image->numSlotsOf(bits) * 8);
 }
 
 } // namespace osvm
